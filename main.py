@@ -394,21 +394,64 @@ async def cmd_web(message: types.Message) -> None:
 
     # Ma'lumotlarni yig'ish va URL hash ga qo'shish
     import json
+    import base64
     from urllib.parse import quote
 
     stats = get_stats()
     users = get_all_users()
     audits = get_recent_audits(20)
 
-    data_json: str = json.dumps({
-        "stats": stats,
-        "users": users,
-        "audits": audits,
-    }, ensure_ascii=False)
+    # Ma'lumotlarni minimal qilish (faqat kerakli fieldlar)
+    compact_users = []
+    for u in users:
+        compact_users.append({
+            "a": u.get("alias", ""),
+            "u": u.get("username", ""),
+            "q": u.get("query_count", 0),
+            "d": (u.get("registered_at", "") or "")[:10],
+            "ad": u.get("is_admin", 0),
+        })
+
+    compact_audits = []
+    for a in audits:
+        compact_audits.append({
+            "n": a.get("network", ""),
+            "addr": a.get("address", ""),
+            "r": a.get("risk_level", "LOW"),
+            "al": a.get("alias", ""),
+            "t": (a.get("created_at", "") or "")[:16],
+        })
+
+    data = {
+        "s": stats,
+        "u": compact_users,
+        "a": compact_audits,
+    }
+
+    data_json: str = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
+
+    # Base64 encode (URL-safe)
+    data_b64: str = base64.urlsafe_b64encode(data_json.encode()).decode()
 
     # GitHub Pages URL + data hash
     base_url: str = WEBAPP_URL.rstrip("/") + "/index.html"
-    webapp_url: str = f"{base_url}#{quote(data_json)}"
+    webapp_url: str = f"{base_url}#{data_b64}"
+
+    # Telegram URL limit tekshiruvi (~2048)
+    if len(webapp_url) > 2048:
+        # Auditlarni kamaytirish
+        compact_audits = compact_audits[:10]
+        data["a"] = compact_audits
+        data_json = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
+        data_b64 = base64.urlsafe_b64encode(data_json.encode()).decode()
+        webapp_url = f"{base_url}#{data_b64}"
+
+    if len(webapp_url) > 2048:
+        # Hali ham katta — faqat stats
+        data = {"s": stats, "u": compact_users[:5], "a": compact_audits[:5]}
+        data_json = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
+        data_b64 = base64.urlsafe_b64encode(data_json.encode()).decode()
+        webapp_url = f"{base_url}#{data_b64}"
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(

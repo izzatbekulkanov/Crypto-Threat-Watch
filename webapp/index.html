@@ -601,7 +601,7 @@
             });
         });
 
-        // Load data from URL hash
+        // Load data from URL hash (base64 encoded)
         function loadData() {
             try {
                 const hash = window.location.hash.substring(1);
@@ -609,10 +609,35 @@
                     showError('No data received. Please use /web command in bot.');
                     return;
                 }
-                const data = JSON.parse(decodeURIComponent(hash));
+
+                // Base64 URL-safe decode
+                let b64 = hash.replace(/-/g, '+').replace(/_/g, '/');
+                while (b64.length % 4) b64 += '=';
+                const jsonStr = decodeURIComponent(escape(atob(b64)));
+                const compact = JSON.parse(jsonStr);
+
+                // Expand compact format to full format
+                const data = {
+                    stats: compact.s || {},
+                    users: (compact.u || []).map(u => ({
+                        alias: u.a,
+                        username: u.u,
+                        query_count: u.q,
+                        registered_at: u.d,
+                        is_admin: u.ad,
+                    })),
+                    audits: (compact.a || []).map(a => ({
+                        network: a.n,
+                        address: a.addr,
+                        risk_level: a.r,
+                        alias: a.al,
+                        created_at: a.t,
+                    })),
+                };
+
                 render(data);
             } catch (e) {
-                showError('Failed to parse data: ' + e.message);
+                showError('Failed to load data: ' + e.message);
             }
         }
 
