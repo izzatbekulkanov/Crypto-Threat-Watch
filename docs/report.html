@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Crypto Threat Watch - Report</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #080b14;
+            --bg-2: #0f1320;
+            --bg-card: #151a2e;
+            --bg-card-hover: #1c2240;
+            --accent: #00e5a0;
+            --accent-2: #00b8ff;
+            --accent-dim: rgba(0, 229, 160, 0.1);
+            --text: #eef2ff;
+            --text-2: #a0aec0;
+            --text-3: #5a6578;
+            --border: rgba(255,255,255,0.05);
+            --red: #ff4d6a;
+            --red-dim: rgba(255,77,106,0.1);
+            --orange: #ffaa2c;
+            --orange-dim: rgba(255,170,44,0.1);
+            --green: #00e5a0;
+            --green-dim: rgba(0,229,160,0.1);
+            --blue: #00b8ff;
+            --blue-dim: rgba(0,184,255,0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .mesh-bg {
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(circle at 15% 15%, rgba(0,229,160,0.06) 0%, transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(0,184,255,0.05) 0%, transparent 40%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .app {
+            position: relative;
+            z-index: 1;
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 20px 16px 100px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+            animation: slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .net-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 800;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            margin-bottom: 12px;
+        }
+
+        .net-badge svg { width: 18px; height: 18px; }
+
+        .address-box {
+            background: var(--bg-2);
+            border: 1px solid var(--border);
+            padding: 12px;
+            border-radius: 12px;
+            font-family: 'SF Mono', 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--text-2);
+            word-break: break-all;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        /* Risk Box */
+        .risk-banner {
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+            animation: fadeUp 0.6s 0.1s both;
+        }
+
+        .risk-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 8px; opacity: 0.8; }
+        .risk-val { font-size: 28px; font-weight: 800; letter-spacing: 0.5px; }
+
+        .risk-LOW { background: var(--green-dim); border-color: rgba(0,229,160,0.2); color: var(--green); }
+        .risk-MEDIUM { background: var(--orange-dim); border-color: rgba(255,170,44,0.2); color: var(--orange); }
+        .risk-HIGH { background: var(--red-dim); border-color: rgba(255,77,106,0.2); color: var(--red); }
+        .risk-CRITICAL { background: rgba(220,38,38,0.15); border-color: rgba(220,38,38,0.3); color: #f87171; }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+            animation: fadeUp 0.6s 0.2s both;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border-radius: 14px;
+            padding: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .stat-lbl { font-size: 11px; color: var(--text-3); font-weight: 600; margin-bottom: 6px; }
+        .stat-val { font-size: 18px; font-weight: 800; color: var(--text); }
+        .stat-val.accent { color: var(--accent); }
+
+        /* Summary List */
+        .summary-list {
+            background: var(--bg-card);
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            margin-bottom: 24px;
+            overflow: hidden;
+            animation: fadeUp 0.6s 0.3s both;
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .summary-item:last-child { border-bottom: none; }
+
+        .si-lbl { font-size: 13px; color: var(--text-2); font-weight: 500; display: flex; align-items: center; gap: 8px; }
+        .si-lbl svg { width: 16px; height: 16px; color: var(--text-3); }
+        .si-val { font-size: 14px; font-weight: 700; color: var(--text); }
+
+        .si-val.in { color: var(--green); }
+        .si-val.out { color: var(--red); }
+        .si-val.net { color: var(--blue); }
+
+        /* Tokens */
+        .sec-title { font-size: 14px; font-weight: 700; color: var(--text-2); margin-bottom: 12px; padding: 0 4px; }
+
+        .token-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            animation: fadeUp 0.6s 0.4s both;
+        }
+
+        .token-card {
+            background: var(--bg-card);
+            border-radius: 14px;
+            padding: 14px 16px;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .tk-info { display: flex; align-items: center; gap: 12px; }
+        .tk-icon {
+            width: 32px; height: 32px;
+            border-radius: 10px;
+            background: var(--bg-2);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: 800; color: var(--text-2);
+            border: 1px solid var(--border);
+        }
+        .tk-sym { font-size: 15px; font-weight: 700; }
+        .tk-bal { text-align: right; }
+        .tk-bval { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+        .tk-cval { font-size: 11px; color: var(--text-3); }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="mesh-bg"></div>
+    <div class="app" id="app">
+        <!-- Content will be injected here -->
+        <div style="text-align:center; padding:50px; color:var(--text-3)">Loading audit report...</div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        try { tg.setHeaderColor('#080b14'); tg.setBackgroundColor('#080b14'); } catch(e) {}
+
+        function base64urlDecodeToBytes(str) {
+            str = str.replace(/-/g, '+').replace(/_/g, '/');
+            while (str.length % 4) str += '=';
+            const table = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+            const lookup = {};
+            for (let i = 0; i < table.length; i++) lookup[table[i]] = i;
+            const bytes = [];
+            let buf = 0, bits = 0;
+            for (let i = 0; i < str.length; i++) {
+                const c = str[i];
+                if (c === '=') break;
+                if (!(c in lookup)) continue;
+                buf = (buf << 6) | lookup[c];
+                bits += 6;
+                if (bits >= 8) {
+                    bits -= 8;
+                    bytes.push((buf >> bits) & 0xFF);
+                }
+            }
+            return new Uint8Array(bytes);
+        }
+
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const rawData = params.get('d') || '';
+
+            if (!rawData) throw new Error('No data found');
+
+            const bytes = base64urlDecodeToBytes(rawData);
+            const jsonStr = new TextDecoder('utf-8').decode(bytes);
+            const data = JSON.parse(jsonStr);
+
+            renderReport(data);
+        } catch (e) {
+            document.getElementById('app').innerHTML = `<div style="text-align:center; padding:50px; color:#ff4d6a">Error loading report.<br><br><span style="font-size:12px; color:var(--text-3)">${e.message}</span></div>`;
+        }
+
+        function renderReport(d) {
+            const netIcons = {
+                TON: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+                ETH: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.5l-8 11.2L12 17l8-4.3L12 1.5zM4 12.7L12 22.5l8-9.8-8 4.3-8-4.3z"/></svg>`,
+                TRON: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L3 9l3 11 6 2 6-2 3-11-9-7zm0 3l5.5 4.3L12 18 6.5 9.3 12 5z"/></svg>`,
+            };
+
+            const net = (d.n || 'UNKNOWN').toUpperCase();
+            const icon = netIcons[net] || netIcons.TON;
+            
+            let rCls = 'risk-LOW';
+            if (d.r.includes('CRITICAL')) rCls = 'risk-CRITICAL';
+            else if (d.r.includes('HIGH')) rCls = 'risk-HIGH';
+            else if (d.r.includes('MEDIUM')) rCls = 'risk-MEDIUM';
+
+            let html = `
+                <div class="header">
+                    <div class="net-badge" style="color:var(--accent)">
+                        ${icon} ${net} NETWORK
+                    </div>
+                    <div class="address-box">${d.addr || 'Unknown Address'}</div>
+                </div>
+
+                <div class="risk-banner ${rCls}">
+                    <div class="risk-title">Risk Level</div>
+                    <div class="risk-val">${d.r || 'LOW'}</div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-lbl">Current Balance</div>
+                        <div class="stat-val accent">${d.bal || '0'}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-lbl">Transactions</div>
+                        <div class="stat-val">${d.tx || '0'}</div>
+                    </div>
+                </div>
+
+                <div class="summary-list">
+                    <div class="summary-item">
+                        <div class="si-lbl">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                            Total Income
+                        </div>
+                        <div class="si-val in">${d.in || '0'}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="si-lbl">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                            Total Outcome
+                        </div>
+                        <div class="si-val out">${d.out || '0'}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="si-lbl">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                            Net Balance
+                        </div>
+                        <div class="si-val net">${d.net || '0'}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="si-lbl">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 12l-4-4-4 4M12 8v8"/></svg>
+                            Total Volume
+                        </div>
+                        <div class="si-val">${d.vol || '0'}</div>
+                    </div>
+                </div>
+            `;
+
+            if (d.tk && d.tk.length > 0) {
+                html += `
+                    <div class="sec-title">Token Assets (${d.tk.length})</div>
+                    <div class="token-list">
+                `;
+                d.tk.forEach(t => {
+                    const sym = t.s || 'UNK';
+                    const init = sym.substring(0, 2).toUpperCase();
+                    html += `
+                        <div class="token-card">
+                            <div class="tk-info">
+                                <div class="tk-icon">${init}</div>
+                                <div class="tk-sym">${sym}</div>
+                            </div>
+                            <div class="tk-bal">
+                                <div class="tk-bval">${t.b || '0'}</div>
+                                <div class="tk-cval">${t.c && t.c !== '—' ? '💎 ' + t.c : ''}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            }
+
+            document.getElementById('app').innerHTML = html;
+        }
+    </script>
+</body>
+</html>

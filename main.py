@@ -395,6 +395,7 @@ async def cmd_web(message: types.Message) -> None:
     # Ma'lumotlarni yig'ish va URL hash ga qo'shish
     import json
     import base64
+    import time
     from urllib.parse import quote
 
     stats = get_stats()
@@ -436,18 +437,19 @@ async def cmd_web(message: types.Message) -> None:
     # GitHub Pages URL + data (query param orqali, hash emas — Telegram hash'ni o'chiradi)
     base_url: str = WEBAPP_URL.rstrip("/") + "/index.html"
     data_b64: str = _encode(data)
-    webapp_url: str = f"{base_url}?d={data_b64}"
+    cache_buster = int(time.time())
+    webapp_url: str = f"{base_url}?d={data_b64}&v={cache_buster}"
 
     # Telegram URL limit tekshiruvi (~2048)
     if len(webapp_url) > 2048:
         data["a"] = compact_audits[:10]
         data_b64 = _encode(data)
-        webapp_url = f"{base_url}?d={data_b64}"
+        webapp_url = f"{base_url}?d={data_b64}&v={cache_buster}"
 
     if len(webapp_url) > 2048:
         data = {"s": stats, "u": compact_users[:5], "a": compact_audits[:5]}
         data_b64 = _encode(data)
-        webapp_url = f"{base_url}?d={data_b64}"
+        webapp_url = f"{base_url}?d={data_b64}&v={cache_buster}"
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
@@ -582,6 +584,37 @@ async def handle_link(message: types.Message, state: FSMContext) -> None:
         summary: str = f"In:{data['total_income']} Out:{data['total_outcome']}"
         log_audit(message.from_user.id, network, address, summary, risk_level)
 
+        # Web App URL tayyorlash
+        keyboard = None
+        if WEBAPP_URL:
+            import json
+            import base64
+            import time
+            webapp_data = {
+                "n": data.get("network", ""),
+                "addr": data.get("address", ""),
+                "bal": data.get("current_balance", ""),
+                "in": data.get("total_income", ""),
+                "out": data.get("total_outcome", ""),
+                "net": data.get("net_balance", ""),
+                "vol": data.get("total_volume", ""),
+                "tx": data.get("tx_count", 0),
+                "r": risk_level,
+                "tk": [{"s": tk.get("symbol", ""), "b": tk.get("balance", ""), "c": tk.get("current_balance", "")} for tk in data.get("tokens", [])[:15]]
+            }
+            json_bytes = json.dumps(webapp_data, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+            data_b64 = base64.urlsafe_b64encode(json_bytes).decode().rstrip('=')
+            cache_buster = int(time.time())
+            base_url = WEBAPP_URL.rstrip("/") + "/report.html"
+            webapp_url = f"{base_url}?d={data_b64}&v={cache_buster}"
+
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text=t("view_in_webapp", lang),
+                    web_app=WebAppInfo(url=webapp_url)
+                )]
+            ])
+
         # Xabar uzunligi nazorati (Telegram limit: 4096)
         if len(report) > 4000:
             # Ikki qismga bo'lish
@@ -591,9 +624,9 @@ async def handle_link(message: types.Message, state: FSMContext) -> None:
                 split_pos = mid
 
             await status_msg.edit_text(report[:split_pos], parse_mode=ParseMode.MARKDOWN)
-            await message.answer(report[split_pos:], parse_mode=ParseMode.MARKDOWN)
+            await message.answer(report[split_pos:], parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
         else:
-            await status_msg.edit_text(report, parse_mode=ParseMode.MARKDOWN)
+            await status_msg.edit_text(report, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
 
     except Exception as e:
         logger.error(f"Audit xatolik [{network}:{address[:10]}]: {e}", exc_info=True)

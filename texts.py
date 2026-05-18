@@ -405,11 +405,17 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "📭 No queries yet.",
     },
 
-    # Ro'yxatdan o'tmagan
     "not_registered": {
         "uz": "⚠️ Avval /start buyrug'ini yuboring.",
         "ru": "⚠️ Сначала отправьте /start.",
         "en": "⚠️ Please send /start first.",
+    },
+
+    # Button
+    "view_in_webapp": {
+        "uz": "📊 Web App da ko'rish",
+        "ru": "📊 Открыть в Web App",
+        "en": "📊 View in Web App",
     },
 }
 
