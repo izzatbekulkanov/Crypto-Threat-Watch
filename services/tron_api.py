@@ -33,6 +33,7 @@ async def get_tron_usdt_balance(address: str) -> dict:
     trx_out: int = 0
     trx_tx_count: int = 0
     current_trx: float = 0.0
+    yearly_stats: dict[str, dict[str, float]] = {}
 
     # TRC-20 tokenlar
     token_data_map: dict[str, dict[str, float]] = {}
@@ -76,6 +77,14 @@ async def get_tron_usdt_balance(address: str) -> dict:
                 trx_tx_count += len(trx_txs)
 
                 for tx in trx_txs:
+                    tx_time = tx.get("block_timestamp", 0)
+                    year = "Unknown"
+                    if tx_time:
+                        from datetime import datetime, timezone
+                        year = str(datetime.fromtimestamp(tx_time / 1000, tz=timezone.utc).year)
+                    if year not in yearly_stats:
+                        yearly_stats[year] = {"in": 0.0, "out": 0.0}
+
                     raw_data: dict = tx.get("raw_data", {})
                     contracts: list = raw_data.get("contract", [])
                     for contract in contracts:
@@ -87,8 +96,10 @@ async def get_tron_usdt_balance(address: str) -> dict:
 
                             if _is_same_address(to_addr, address):
                                 trx_in += amount
+                                yearly_stats[year]["in"] += amount / _TRX_DIVISOR
                             if _is_same_address(owner_addr, address):
                                 trx_out += amount
+                                yearly_stats[year]["out"] += amount / _TRX_DIVISOR
                                 
                 fingerprint = trx_data.get("meta", {}).get("fingerprint")
                 if not fingerprint:
@@ -209,8 +220,9 @@ async def get_tron_usdt_balance(address: str) -> dict:
         "total_outcome": main_outcome,
         "net_balance": main_net,
         "total_volume": main_volume,
-        "tx_count": trx_tx_count,
+        "tx_count": total_tx,
         "tokens": tokens,
+        "yearly_stats": yearly_stats,
     }
 
 

@@ -31,6 +31,7 @@ async def get_eth_balance(address: str) -> dict:
     total_out: int = 0
     tx_count: int = 0
     current_balance: float = 0.0
+    yearly_stats: dict[str, dict[str, float]] = {}
 
     # ERC-20 tokenlar
     token_data_map: dict[str, dict[str, float]] = {}
@@ -85,10 +86,21 @@ async def get_eth_balance(address: str) -> dict:
                     value: int = int(tx.get("value", "0"))
                     if value == 0:
                         continue
+                        
+                    tx_time = int(tx.get("timeStamp", "0"))
+                    year = "Unknown"
+                    if tx_time:
+                        from datetime import datetime, timezone
+                        year = str(datetime.fromtimestamp(tx_time, tz=timezone.utc).year)
+                    if year not in yearly_stats:
+                        yearly_stats[year] = {"in": 0.0, "out": 0.0}
+
                     if tx.get("to", "").lower() == address_lower:
                         total_in += value
+                        yearly_stats[year]["in"] += value / _WEI_DIVISOR
                     if tx.get("from", "").lower() == address_lower:
                         total_out += value
+                        yearly_stats[year]["out"] += value / _WEI_DIVISOR
                 
                 if len(transactions) < 10000:
                     break
@@ -177,4 +189,5 @@ async def get_eth_balance(address: str) -> dict:
         "total_volume": f"{total_volume:,.6f} ETH",
         "tx_count": tx_count,
         "tokens": tokens,
+        "yearly_stats": yearly_stats,
     }

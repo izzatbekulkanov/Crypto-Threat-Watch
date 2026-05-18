@@ -34,6 +34,7 @@ async def get_ton_balance(address: str) -> dict:
     current_balance: float = 0.0
     account_status: str = "unknown"
     balance_verified: bool = False
+    yearly_stats: dict[str, dict[str, float]] = {}
 
     async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
         # ═══ 1. Hozirgi balans (tonapi.io) ═══
@@ -103,14 +104,25 @@ async def get_ton_balance(address: str) -> dict:
                 tx_count += len(transactions)
 
                 for tx in transactions:
+                    tx_time = tx.get("utime", 0)
+                    year = "Unknown"
+                    if tx_time:
+                        year = str(datetime.fromtimestamp(tx_time, tz=timezone.utc).year)
+                    if year not in yearly_stats:
+                        yearly_stats[year] = {"in": 0.0, "out": 0.0}
+
                     in_msg: dict | None = tx.get("in_msg")
                     if in_msg and in_msg.get("value"):
-                        total_in += int(in_msg["value"])
+                        val = int(in_msg["value"])
+                        total_in += val
+                        yearly_stats[year]["in"] += val / _NANOTON_DIVISOR
 
                     out_msgs: list[dict] = tx.get("out_msgs", [])
                     for msg in out_msgs:
                         if msg.get("value"):
-                            total_out += int(msg["value"])
+                            val = int(msg["value"])
+                            total_out += val
+                            yearly_stats[year]["out"] += val / _NANOTON_DIVISOR
                             
                 last_lt = transactions[-1].get("lt")
                 if not last_lt:
@@ -163,4 +175,5 @@ async def get_ton_balance(address: str) -> dict:
         "total_volume": f"{total_volume:,.4f} TON",
         "tx_count": tx_count,
         "tokens": jetton_balances,
+        "yearly_stats": yearly_stats,
     }
