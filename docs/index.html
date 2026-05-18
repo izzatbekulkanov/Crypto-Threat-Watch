@@ -767,9 +767,26 @@
     // ═══ Data Loading ═══
     function loadData() {
         try {
-            const hash = window.location.hash.substring(1);
+            // Telegram WebApp hash ga o'z parametrlarini qo'shadi (tgWebAppData=...)
+            // Bizning ma'lumot birinchi & belgisigacha
+            let hash = window.location.hash.substring(1);
             if (!hash) {
                 showEmpty('list-users', 'No data', 'Use /web command in bot to open this panel.');
+                return;
+            }
+
+            // Telegram parametrlarini olib tashlash
+            const ampIdx = hash.indexOf('&');
+            if (ampIdx > 0) hash = hash.substring(0, ampIdx);
+
+            // URL-decode (Telegram URL ni encode qilishi mumkin)
+            try { hash = decodeURIComponent(hash); } catch(e) {}
+
+            // Faqat base64 belgilarini qoldirish (xavfsizlik)
+            hash = hash.replace(/[^A-Za-z0-9+/=_-]/g, '');
+
+            if (!hash) {
+                showEmpty('list-users', 'No data', 'Hash is empty after parsing.');
                 return;
             }
 
