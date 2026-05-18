@@ -773,7 +773,7 @@
                 return;
             }
 
-            // Decode base64 URL-safe
+            // Decode base64 URL-safe (- -> +, _ -> /, padding restored)
             let b64 = hash.replace(/-/g, '+').replace(/_/g, '/');
             while (b64.length % 4) b64 += '=';
             const raw = atob(b64);

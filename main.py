@@ -430,8 +430,10 @@ async def cmd_web(message: types.Message) -> None:
 
     data_json: str = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
 
-    # Base64 encode (URL-safe)
-    data_b64: str = base64.urlsafe_b64encode(data_json.encode()).decode()
+    # Base64 encode (standart, padding olib tashlangan, URL-safe qilingan)
+    data_b64: str = base64.b64encode(data_json.encode()).decode().rstrip('=')
+    # + belgisini URL-safe qilish
+    data_b64 = data_b64.replace('+', '-').replace('/', '_')
 
     # GitHub Pages URL + data hash
     base_url: str = WEBAPP_URL.rstrip("/") + "/index.html"
@@ -443,14 +445,16 @@ async def cmd_web(message: types.Message) -> None:
         compact_audits = compact_audits[:10]
         data["a"] = compact_audits
         data_json = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
-        data_b64 = base64.urlsafe_b64encode(data_json.encode()).decode()
+        data_b64 = base64.b64encode(data_json.encode()).decode().rstrip('=')
+        data_b64 = data_b64.replace('+', '-').replace('/', '_')
         webapp_url = f"{base_url}#{data_b64}"
 
     if len(webapp_url) > 2048:
         # Hali ham katta — faqat stats
         data = {"s": stats, "u": compact_users[:5], "a": compact_audits[:5]}
         data_json = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
-        data_b64 = base64.urlsafe_b64encode(data_json.encode()).decode()
+        data_b64 = base64.b64encode(data_json.encode()).decode().rstrip('=')
+        data_b64 = data_b64.replace('+', '-').replace('/', '_')
         webapp_url = f"{base_url}#{data_b64}"
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
