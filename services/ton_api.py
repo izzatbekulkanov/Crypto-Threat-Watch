@@ -79,27 +79,44 @@ async def get_ton_balance(address: str) -> dict:
             # Tonapi natijasini ishlatamiz
             balance_verified = False
 
-        # ═══ 3. Tranzaksiyalar (tonapi.io) ═══
+        # ═══ 3. Tranzaksiyalar (tonapi.io) — Yillar kesimida barchasini olish ═══
         try:
-            resp = await safe_request(
-                client, "GET",
-                f"{_TONAPI_URL}/blockchain/accounts/{address}/transactions",
-                headers=_HEADERS,
-                params={"limit": 100},
-            )
-            data: dict = resp.json()
-            transactions: list[dict] = data.get("transactions", [])
-            tx_count = len(transactions)
+            before_lt = None
+            # Maksimal 100 sahifa (10,000 tranzaksiya) xavfsizlik uchun, aksariyat hamyonlar uchun yetarli.
+            for _ in range(100):
+                params = {"limit": 100}
+                if before_lt:
+                    params["before_lt"] = before_lt
+                    
+                resp = await safe_request(
+                    client, "GET",
+                    f"{_TONAPI_URL}/blockchain/accounts/{address}/transactions",
+                    headers=_HEADERS,
+                    params=params,
+                )
+                data: dict = resp.json()
+                transactions: list[dict] = data.get("transactions", [])
+                
+                if not transactions:
+                    break
+                    
+                tx_count += len(transactions)
 
-            for tx in transactions:
-                in_msg: dict | None = tx.get("in_msg")
-                if in_msg and in_msg.get("value"):
-                    total_in += int(in_msg["value"])
+                for tx in transactions:
+                    in_msg: dict | None = tx.get("in_msg")
+                    if in_msg and in_msg.get("value"):
+                        total_in += int(in_msg["value"])
 
-                out_msgs: list[dict] = tx.get("out_msgs", [])
-                for msg in out_msgs:
-                    if msg.get("value"):
-                        total_out += int(msg["value"])
+                    out_msgs: list[dict] = tx.get("out_msgs", [])
+                    for msg in out_msgs:
+                        if msg.get("value"):
+                            total_out += int(msg["value"])
+                            
+                last_lt = transactions[-1].get("lt")
+                if not last_lt:
+                    break
+                before_lt = last_lt
+                
         except Exception as e:
             logger.warning(f"TON transactions fetch error: {e}")
 

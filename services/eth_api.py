@@ -54,63 +54,74 @@ async def get_eth_balance(address: str) -> dict:
             logger.error(f"ETH balance fetch error: {e}")
             return {"network": "ETH", "address": address, "error": str(e)}
 
-        # 2. ETH tranzaksiyalari
+        # 2. ETH tranzaksiyalari (yillar kesimida)
         try:
-            resp = await safe_request(
-                client, "GET", _BASE_URL,
-                params={
-                    "module": "account",
-                    "action": "txlist",
-                    "address": address,
-                    "startblock": "0",
-                    "endblock": "99999999",
-                    "sort": "desc",
-                    "offset": "300",
-                    "page": "1",
-                    "apikey": ETHERSCAN_API_KEY,
-                },
-            )
-            data: dict = resp.json()
-            transactions: list[dict] = data.get("result", [])
-
-            if not isinstance(transactions, list):
-                return {"network": "ETH", "address": address, "error": str(transactions)}
-
-            tx_count = len(transactions)
             address_lower: str = address.lower()
+            page = 1
+            for _ in range(10): # Max 10 sahifa (100,000 tranzaksiya)
+                resp = await safe_request(
+                    client, "GET", _BASE_URL,
+                    params={
+                        "module": "account",
+                        "action": "txlist",
+                        "address": address,
+                        "startblock": "0",
+                        "endblock": "99999999",
+                        "sort": "desc",
+                        "offset": "10000",
+                        "page": str(page),
+                        "apikey": ETHERSCAN_API_KEY,
+                    },
+                )
+                data: dict = resp.json()
+                transactions: list[dict] = data.get("result", [])
 
-            for tx in transactions:
-                value: int = int(tx.get("value", "0"))
-                if value == 0:
-                    continue
-                if tx.get("to", "").lower() == address_lower:
-                    total_in += value
-                if tx.get("from", "").lower() == address_lower:
-                    total_out += value
+                if not isinstance(transactions, list) or not transactions:
+                    break
+
+                tx_count += len(transactions)
+
+                for tx in transactions:
+                    value: int = int(tx.get("value", "0"))
+                    if value == 0:
+                        continue
+                    if tx.get("to", "").lower() == address_lower:
+                        total_in += value
+                    if tx.get("from", "").lower() == address_lower:
+                        total_out += value
+                
+                if len(transactions) < 10000:
+                    break
+                page += 1
+
         except Exception as e:
             logger.warning(f"ETH txlist fetch error: {e}")
 
         # 3. ERC-20 token transferlari
         try:
-            resp = await safe_request(
-                client, "GET", _BASE_URL,
-                params={
-                    "module": "account",
-                    "action": "tokentx",
-                    "address": address,
-                    "startblock": "0",
-                    "endblock": "99999999",
-                    "sort": "desc",
-                    "offset": "300",
-                    "page": "1",
-                    "apikey": ETHERSCAN_API_KEY,
-                },
-            )
-            token_resp_data: dict = resp.json()
-            token_txs: list[dict] = token_resp_data.get("result", [])
+            address_lower = address.lower()
+            page = 1
+            for _ in range(10): # Max 10 sahifa
+                resp = await safe_request(
+                    client, "GET", _BASE_URL,
+                    params={
+                        "module": "account",
+                        "action": "tokentx",
+                        "address": address,
+                        "startblock": "0",
+                        "endblock": "99999999",
+                        "sort": "desc",
+                        "offset": "10000",
+                        "page": str(page),
+                        "apikey": ETHERSCAN_API_KEY,
+                    },
+                )
+                token_resp_data: dict = resp.json()
+                token_txs: list[dict] = token_resp_data.get("result", [])
 
-            if isinstance(token_txs, list):
-                address_lower = address.lower()
+                if not isinstance(token_txs, list) or not token_txs:
+                    break
+
                 for ttx in token_txs:
                     symbol: str = ttx.get("tokenSymbol", "UNKNOWN")
                     decimals: int = int(ttx.get("tokenDecimal", "18"))
@@ -124,6 +135,11 @@ async def get_eth_balance(address: str) -> dict:
                         token_data_map[symbol]["income"] += value_token
                     if ttx.get("from", "").lower() == address_lower:
                         token_data_map[symbol]["outcome"] += value_token
+                        
+                if len(token_txs) < 10000:
+                    break
+                page += 1
+
         except Exception as e:
             logger.warning(f"ETH token fetch error: {e}")
 

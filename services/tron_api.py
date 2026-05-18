@@ -53,67 +53,94 @@ async def get_tron_usdt_balance(address: str) -> dict:
             logger.error(f"TRON account fetch error: {e}")
             return {"network": "TRON", "address": address, "error": str(e)}
 
-        # 2. TRX tranzaksiyalari
+        # 2. TRX tranzaksiyalari (yillar kesimida)
         try:
-            resp = await safe_request(
-                client, "GET",
-                f"{_BASE_URL}/v1/accounts/{address}/transactions",
-                headers=headers,
-                params={"only_confirmed": "true", "limit": "200"},
-            )
-            trx_data: dict = resp.json()
-            trx_txs: list[dict] = trx_data.get("data", [])
-            trx_tx_count = len(trx_txs)
+            fingerprint = None
+            for _ in range(50): # Max 10,000 txs
+                params = {"only_confirmed": "true", "limit": "200"}
+                if fingerprint:
+                    params["fingerprint"] = fingerprint
+                    
+                resp = await safe_request(
+                    client, "GET",
+                    f"{_BASE_URL}/v1/accounts/{address}/transactions",
+                    headers=headers,
+                    params=params,
+                )
+                trx_data: dict = resp.json()
+                trx_txs: list[dict] = trx_data.get("data", [])
+                
+                if not trx_txs:
+                    break
+                    
+                trx_tx_count += len(trx_txs)
 
-            for tx in trx_txs:
-                raw_data: dict = tx.get("raw_data", {})
-                contracts: list = raw_data.get("contract", [])
-                for contract in contracts:
-                    if contract.get("type") == "TransferContract":
-                        param: dict = contract.get("parameter", {}).get("value", {})
-                        amount: int = param.get("amount", 0)
-                        to_addr: str = param.get("to_address", "")
-                        owner_addr: str = param.get("owner_address", "")
+                for tx in trx_txs:
+                    raw_data: dict = tx.get("raw_data", {})
+                    contracts: list = raw_data.get("contract", [])
+                    for contract in contracts:
+                        if contract.get("type") == "TransferContract":
+                            param: dict = contract.get("parameter", {}).get("value", {})
+                            amount: int = param.get("amount", 0)
+                            to_addr: str = param.get("to_address", "")
+                            owner_addr: str = param.get("owner_address", "")
 
-                        if _is_same_address(to_addr, address):
-                            trx_in += amount
-                        if _is_same_address(owner_addr, address):
-                            trx_out += amount
+                            if _is_same_address(to_addr, address):
+                                trx_in += amount
+                            if _is_same_address(owner_addr, address):
+                                trx_out += amount
+                                
+                fingerprint = trx_data.get("meta", {}).get("fingerprint")
+                if not fingerprint:
+                    break
         except Exception as e:
             logger.warning(f"TRON TRX transactions error: {e}")
 
-        # 3. TRC-20 token tranzaksiyalari
+        # 3. TRC-20 token tranzaksiyalari (yillar kesimida)
         try:
-            resp = await safe_request(
-                client, "GET",
-                f"{_BASE_URL}/v1/accounts/{address}/transactions/trc20",
-                headers=headers,
-                params={"only_confirmed": "true", "limit": "200"},
-            )
-            trc20_data: dict = resp.json()
-            trc20_txs: list[dict] = trc20_data.get("data", [])
             address_lower: str = address.lower()
+            fingerprint = None
+            for _ in range(50):
+                params = {"only_confirmed": "true", "limit": "200"}
+                if fingerprint:
+                    params["fingerprint"] = fingerprint
+                    
+                resp = await safe_request(
+                    client, "GET",
+                    f"{_BASE_URL}/v1/accounts/{address}/transactions/trc20",
+                    headers=headers,
+                    params=params,
+                )
+                trc20_data: dict = resp.json()
+                trc20_txs: list[dict] = trc20_data.get("data", [])
 
-            for tx in trc20_txs:
-                value: int = int(tx.get("value", "0"))
-                if value == 0:
-                    continue
+                if not trc20_txs:
+                    break
 
-                token_info: dict = tx.get("token_info", {})
-                symbol: str = token_info.get("symbol", "UNKNOWN")
-                decimals: int = int(token_info.get("decimals", "6"))
-                token_value: float = value / (10 ** decimals)
+                for tx in trc20_txs:
+                    value: int = int(tx.get("value", "0"))
+                    if value == 0:
+                        continue
 
-                if symbol not in token_data_map:
-                    token_data_map[symbol] = {"income": 0.0, "outcome": 0.0}
+                    token_info: dict = tx.get("token_info", {})
+                    symbol: str = token_info.get("symbol", "UNKNOWN")
+                    decimals: int = int(token_info.get("decimals", "6"))
+                    token_value: float = value / (10 ** decimals)
 
-                to_addr_str: str = tx.get("to", "").lower()
-                from_addr_str: str = tx.get("from", "").lower()
+                    if symbol not in token_data_map:
+                        token_data_map[symbol] = {"income": 0.0, "outcome": 0.0}
 
-                if to_addr_str == address_lower:
-                    token_data_map[symbol]["income"] += token_value
-                if from_addr_str == address_lower:
-                    token_data_map[symbol]["outcome"] += token_value
+                    to_addr_str: str = tx.get("to", "").lower()
+                    from_addr_str: str = tx.get("from", "").lower()
+
+                    if to_addr_str == address_lower:
+                        token_data_map[symbol]["income"] += token_value
+                    if from_addr_str == address_lower:
+                        token_data_map[symbol]["outcome"] += token_value
+                        
+                fingerprint = trc20_data.get("meta", {}).get("fingerprint")
+                if not fingerprint:
+                    break
         except Exception as e:
             logger.warning(f"TRON TRC-20 fetch error: {e}")
 
