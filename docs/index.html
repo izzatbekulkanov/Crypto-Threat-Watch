@@ -767,35 +767,39 @@
     // ═══ Data Loading ═══
     function loadData() {
         try {
-            // Telegram WebApp hash ga o'z parametrlarini qo'shadi (tgWebAppData=...)
-            // Bizning ma'lumot birinchi & belgisigacha
-            let hash = window.location.hash.substring(1);
-            if (!hash) {
+            // Query param "?d=" dan ma'lumot olish (Telegram hash'ni o'chiradi!)
+            const params = new URLSearchParams(window.location.search);
+            const rawData = params.get('d') || '';
+
+            if (!rawData) {
                 showEmpty('list-users', 'No data', 'Use /web command in bot to open this panel.');
                 return;
             }
 
-            // Telegram parametrlarini olib tashlash
-            const ampIdx = hash.indexOf('&');
-            if (ampIdx > 0) hash = hash.substring(0, ampIdx);
-
-            // URL-decode (Telegram URL ni encode qilishi mumkin)
-            try { hash = decodeURIComponent(hash); } catch(e) {}
-
-            // Faqat base64 belgilarini qoldirish (xavfsizlik)
-            hash = hash.replace(/[^A-Za-z0-9+/=_-]/g, '');
-
-            if (!hash) {
-                showEmpty('list-users', 'No data', 'Hash is empty after parsing.');
-                return;
+            // Pure JS base64url decoder — atob() ishlatmasdan
+            function base64urlDecodeToBytes(str) {
+                str = str.replace(/-/g, '+').replace(/_/g, '/');
+                while (str.length % 4) str += '=';
+                const table = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+                const lookup = {};
+                for (let i = 0; i < table.length; i++) lookup[table[i]] = i;
+                const bytes = [];
+                let buf = 0, bits = 0;
+                for (let i = 0; i < str.length; i++) {
+                    const c = str[i];
+                    if (c === '=') break;
+                    if (!(c in lookup)) continue;
+                    buf = (buf << 6) | lookup[c];
+                    bits += 6;
+                    if (bits >= 8) {
+                        bits -= 8;
+                        bytes.push((buf >> bits) & 0xFF);
+                    }
+                }
+                return new Uint8Array(bytes);
             }
 
-            // Decode base64 URL-safe (- -> +, _ -> /, padding restored)
-            let b64 = hash.replace(/-/g, '+').replace(/_/g, '/');
-            while (b64.length % 4) b64 += '=';
-            const raw = atob(b64);
-            const bytes = new Uint8Array(raw.length);
-            for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+            const bytes = base64urlDecodeToBytes(rawData);
             const jsonStr = new TextDecoder('utf-8').decode(bytes);
             const compact = JSON.parse(jsonStr);
 
