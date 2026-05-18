@@ -116,6 +116,28 @@ def set_admin(user_id: int) -> None:
     conn.commit()
     conn.close()
 
+def toggle_admin(user_id: int) -> bool:
+    """Admin holatini o'zgartirish (yoqish/o'chirish)."""
+    conn = _get_connection()
+    row = conn.execute("SELECT is_admin FROM users WHERE user_id = ?", (user_id,)).fetchone()
+    if row:
+        new_status = 0 if row["is_admin"] else 1
+        conn.execute("UPDATE users SET is_admin = ? WHERE user_id = ?", (new_status, user_id))
+        conn.commit()
+        conn.close()
+        return bool(new_status)
+    conn.close()
+    return False
+
+def update_alias(user_id: int, new_alias: str) -> bool:
+    """Foydalanuvchi taxallusini o'zgartirish."""
+    conn = _get_connection()
+    conn.execute("UPDATE users SET alias = ? WHERE user_id = ?", (new_alias, user_id))
+    rows_affected = conn.total_changes
+    conn.commit()
+    conn.close()
+    return rows_affected > 0
+
 
 def is_admin(user_id: int) -> bool:
     """Admin ekanligini tekshirish."""

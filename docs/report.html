@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Crypto Threat Watch - Report</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -160,6 +161,8 @@
         .si-val.out { color: var(--red); }
         .si-val.net { color: var(--blue); }
 
+        .chart-container { background: var(--bg-card); border-radius: 14px; padding: 16px; border: 1px solid var(--border); margin-bottom: 24px; animation: fadeUp 0.6s 0.35s both; }
+        
         /* Tokens */
         .sec-title { font-size: 14px; font-weight: 700; color: var(--text-2); margin-bottom: 12px; padding: 0 4px; }
 
@@ -213,6 +216,59 @@
         tg.expand();
         try { tg.setHeaderColor('#080b14'); tg.setBackgroundColor('#080b14'); } catch(e) {}
 
+        const lang = tg.initDataUnsafe?.user?.language_code || 'en';
+        
+        const i18n = {
+            uz: {
+                loading: "Hisobot yuklanmoqda...",
+                err: "Hisobotni yuklashda xatolik.",
+                net: "TARMOG'I",
+                risk: "Xavf Darajasi",
+                bal: "Joriy Balans",
+                tx: "Tranzaksiyalar",
+                tin: "Jami Kirim",
+                tout: "Jami Chiqim",
+                tnet: "Sof Qoldiq",
+                tvol: "Jami Aylanma",
+                chart_title: "Yillar Kesimida Tranzaksiyalar",
+                tokens: "Tokenlar",
+                unk: "Noma'lum Manzil"
+            },
+            ru: {
+                loading: "Загрузка отчета...",
+                err: "Ошибка загрузки отчета.",
+                net: "СЕТЬ",
+                risk: "Уровень Риска",
+                bal: "Текущий Баланс",
+                tx: "Транзакции",
+                tin: "Общий Приход",
+                tout: "Общий Расход",
+                tnet: "Чистый Остаток",
+                tvol: "Общий Оборот",
+                chart_title: "Транзакции по Годам",
+                tokens: "Токены",
+                unk: "Неизвестный Адрес"
+            },
+            en: {
+                loading: "Loading report...",
+                err: "Error loading report.",
+                net: "NETWORK",
+                risk: "Risk Level",
+                bal: "Current Balance",
+                tx: "Transactions",
+                tin: "Total Income",
+                tout: "Total Outcome",
+                tnet: "Net Balance",
+                tvol: "Total Volume",
+                chart_title: "Transactions by Year",
+                tokens: "Token Assets",
+                unk: "Unknown Address"
+            }
+        };
+        const t = i18n[lang] || i18n.uz;
+
+        document.getElementById('app').innerHTML = `<div style="text-align:center; padding:50px; color:var(--text-3)">${t.loading}</div>`;
+
         function base64urlDecodeToBytes(str) {
             str = str.replace(/-/g, '+').replace(/_/g, '/');
             while (str.length % 4) str += '=';
@@ -247,7 +303,7 @@
 
             renderReport(data);
         } catch (e) {
-            document.getElementById('app').innerHTML = `<div style="text-align:center; padding:50px; color:#ff4d6a">Error loading report.<br><br><span style="font-size:12px; color:var(--text-3)">${e.message}</span></div>`;
+            document.getElementById('app').innerHTML = `<div style="text-align:center; padding:50px; color:#ff4d6a">${t.err}<br><br><span style="font-size:12px; color:var(--text-3)">${e.message}</span></div>`;
         }
 
         function renderReport(d) {
@@ -268,23 +324,23 @@
             let html = `
                 <div class="header">
                     <div class="net-badge" style="color:var(--accent)">
-                        ${icon} ${net} NETWORK
+                        ${icon} ${net} ${t.net}
                     </div>
-                    <div class="address-box">${d.addr || 'Unknown Address'}</div>
+                    <div class="address-box">${d.addr || t.unk}</div>
                 </div>
 
                 <div class="risk-banner ${rCls}">
-                    <div class="risk-title">Risk Level</div>
+                    <div class="risk-title">${t.risk}</div>
                     <div class="risk-val">${d.r || 'LOW'}</div>
                 </div>
 
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-lbl">Current Balance</div>
+                        <div class="stat-lbl">${t.bal}</div>
                         <div class="stat-val accent">${d.bal || '0'}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-lbl">Transactions</div>
+                        <div class="stat-lbl">${t.tx}</div>
                         <div class="stat-val">${d.tx || '0'}</div>
                     </div>
                 </div>
@@ -293,37 +349,44 @@
                     <div class="summary-item">
                         <div class="si-lbl">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-                            Total Income
+                            ${t.tin}
                         </div>
                         <div class="si-val in">${d.in || '0'}</div>
                     </div>
                     <div class="summary-item">
                         <div class="si-lbl">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-                            Total Outcome
+                            ${t.tout}
                         </div>
                         <div class="si-val out">${d.out || '0'}</div>
                     </div>
                     <div class="summary-item">
                         <div class="si-lbl">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-                            Net Balance
+                            ${t.tnet}
                         </div>
                         <div class="si-val net">${d.net || '0'}</div>
                     </div>
                     <div class="summary-item">
                         <div class="si-lbl">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 12l-4-4-4 4M12 8v8"/></svg>
-                            Total Volume
+                            ${t.tvol}
                         </div>
                         <div class="si-val">${d.vol || '0'}</div>
                     </div>
                 </div>
             `;
 
+            if (d.y && Object.keys(d.y).length > 0) {
+                html += `<div class="chart-container">
+                    <div class="sec-title">${t.chart_title}</div>
+                    <canvas id="yearlyChart" height="180"></canvas>
+                </div>`;
+            }
+
             if (d.tk && d.tk.length > 0) {
                 html += `
-                    <div class="sec-title">Token Assets (${d.tk.length})</div>
+                    <div class="sec-title">${t.tokens} (${d.tk.length})</div>
                     <div class="token-list">
                 `;
                 d.tk.forEach(t => {
@@ -346,6 +409,37 @@
             }
 
             document.getElementById('app').innerHTML = html;
+
+            if (d.y && Object.keys(d.y).length > 0) {
+                const ctx = document.getElementById('yearlyChart').getContext('2d');
+                const years = Object.keys(d.y).sort();
+                const inData = years.map(y => d.y[y].in);
+                const outData = years.map(y => d.y[y].out);
+
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: years,
+                        datasets: [
+                            { label: t.tin, data: inData, backgroundColor: '#00e5a0', borderRadius: 4 },
+                            { label: t.tout, data: outData, backgroundColor: '#ff4d6a', borderRadius: 4 }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { intersect: false, mode: 'index' },
+                        plugins: {
+                            legend: { labels: { color: '#a0aec0', font: { family: 'Inter' } } },
+                            tooltip: { backgroundColor: '#151a2e', titleColor: '#eef2ff', bodyColor: '#a0aec0', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }
+                        },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { color: '#a0aec0' } },
+                            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#a0aec0' } }
+                        }
+                    }
+                });
+            }
         }
     </script>
 </body>

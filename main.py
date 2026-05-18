@@ -406,6 +406,7 @@ async def cmd_web(message: types.Message) -> None:
     compact_users = []
     for u in users:
         compact_users.append({
+            "id": u.get("user_id"),
             "a": u.get("alias", ""),
             "u": u.get("username", ""),
             "q": u.get("query_count", 0),
@@ -451,18 +452,20 @@ async def cmd_web(message: types.Message) -> None:
         data_b64 = _encode(data)
         webapp_url = f"{base_url}?d={data_b64}&v={cache_buster}"
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
+    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+    keyboard = ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(
             text="🖥 Admin Panel ochish",
             web_app=WebAppInfo(url=webapp_url),
-        )],
-    ])
+        )]
+    ], resize_keyboard=True)
 
     await message.answer(
         "🌐 *Crypto Threat Watch — Admin Panel*\n\n"
-        "Quyidagi tugmani bosing:",
-        reply_markup=keyboard,
+        "Quyidagi tugma orqali kengaytirilgan web boshqaruv paneliga kiring.\n"
+        "_Ushbu panel orqali foydalanuvchilar va auditlarni boshqarish mumkin._",
         parse_mode=ParseMode.MARKDOWN,
+        reply_markup=keyboard,
     )
 
 
@@ -600,6 +603,7 @@ async def handle_link(message: types.Message, state: FSMContext) -> None:
                 "vol": data.get("total_volume", ""),
                 "tx": data.get("tx_count", 0),
                 "r": risk_level,
+                "y": data.get("yearly_stats", {}),
                 "tk": [{"s": tk.get("symbol", ""), "b": tk.get("balance", ""), "c": tk.get("current_balance", "")} for tk in data.get("tokens", [])[:15]]
             }
             json_bytes = json.dumps(webapp_data, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
@@ -636,6 +640,40 @@ async def handle_link(message: types.Message, state: FSMContext) -> None:
             parse_mode=ParseMode.MARKDOWN,
         )
 
+
+# ═══════════════════════════════════════════
+# WebApp orqali boshqaruv (sendData)
+# ═══════════════════════════════════════════
+@dp.message(F.web_app_data)
+async def handle_webapp_data(message: types.Message) -> None:
+    """WebApp dan kelgan ma'lumotlarni qabul qilish (Admin boshqaruvi)."""
+    user_id = message.from_user.id
+    if not is_admin(user_id):
+        await message.answer("⛔ Sizda yetarli huquqlar yo'q.")
+        return
+
+    try:
+        import json
+        from database import toggle_admin, update_alias
+        data_str = message.web_app_data.data
+        payload = json.loads(data_str)
+        
+        action = payload.get("action")
+        target_user = payload.get("user_id")
+        
+        if action == "toggle_admin":
+            new_status = toggle_admin(target_user)
+            status_text = "Admin qilingan" if new_status else "Adminlikdan olingan"
+            await message.answer(f"✅ Foydalanuvchi ({target_user}) {status_text}.")
+        elif action == "edit_alias":
+            new_alias = payload.get("alias")
+            if new_alias:
+                update_alias(target_user, new_alias)
+                await message.answer(f"✅ Foydalanuvchi ({target_user}) taxallusi `{new_alias}` ga o'zgartirildi.", parse_mode=ParseMode.MARKDOWN)
+                
+    except Exception as e:
+        logger.error(f"WebApp ma'lumotlarni qabul qilishda xatolik: {e}")
+        await message.answer(f"❌ Xatolik: {e}")
 
 # ═══════════════════════════════════════════
 # Bot buyruqlarini sozlash

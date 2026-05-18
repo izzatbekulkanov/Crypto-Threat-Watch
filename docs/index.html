@@ -874,18 +874,44 @@
             const init = (u.alias || '?')[0].toUpperCase();
             const cls = u.is_admin ? 'admin' : 'user';
             const crown = u.is_admin ? `<div class="crown-badge"><svg viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M2 4l3 12h14l3-12-5 4-5-4-5 4z"/></svg></div>` : '';
-            return `<div class="u-card" style="animation-delay:${i*40}ms">
-                <div class="u-avatar ${cls}">${init}${crown}</div>
-                <div class="u-info">
-                    <div class="u-name">${u.alias}</div>
-                    <div class="u-meta">${u.username ? '@'+u.username : 'no username'} · ${u.registered_at || '—'}</div>
+            const isAdminStr = u.is_admin ? "Remove Admin" : "Make Admin";
+            return `<div class="u-card" style="animation-delay:${i*40}ms; display: flex; flex-direction: column; align-items: stretch; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+                    <div class="u-avatar ${cls}">${init}${crown}</div>
+                    <div class="u-info">
+                        <div class="u-name">${u.alias}</div>
+                        <div class="u-meta">${u.username ? '@'+u.username : 'no username'} · ${u.registered_at || '—'}</div>
+                    </div>
+                    <div class="u-stat">
+                        <div class="u-stat-val">${u.query_count}</div>
+                        <div class="u-stat-lbl">queries</div>
+                    </div>
                 </div>
-                <div class="u-stat">
-                    <div class="u-stat-val">${u.query_count}</div>
-                    <div class="u-stat-lbl">queries</div>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="manageUser('toggle_admin', ${u.id})" style="flex:1; padding: 6px; background: var(--bg-2); border: 1px solid var(--border); color: var(--text-2); border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer;">${isAdminStr}</button>
+                    <button onclick="manageUser('edit_alias', ${u.id})" style="flex:1; padding: 6px; background: var(--bg-2); border: 1px solid var(--border); color: var(--accent); border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer;">Edit Alias</button>
                 </div>
             </div>`;
         }).join('');
+    }
+
+    function manageUser(action, userId) {
+        let payload = { action: action, user_id: userId };
+        if (action === 'edit_alias') {
+            const newAlias = prompt("Enter new alias for user " + userId + ":");
+            if (!newAlias || newAlias.trim().length < 3) {
+                alert("Alias must be at least 3 characters.");
+                return;
+            }
+            payload.alias = newAlias.trim();
+        }
+        
+        try {
+            tg.sendData(JSON.stringify(payload));
+            tg.close();
+        } catch(e) {
+            alert("This feature only works when opening the WebApp via a Reply Keyboard button.");
+        }
     }
 
     // ═══ Render Audits ═══
