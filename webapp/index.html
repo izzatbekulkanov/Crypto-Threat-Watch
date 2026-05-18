@@ -1,145 +1,839 @@
 <!DOCTYPE html>
-<html lang="uz">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Crypto Threat Watch — Admin</title>
+    <title>Crypto Threat Watch</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root {
-            --bg: #0f0f23;
-            --card: #1c1c3a;
-            --accent: #00d4aa;
-            --text: #e8e8ff;
-            --dim: #8888aa;
-            --border: #2a2a50;
-            --red: #ff4757;
-            --orange: #ffa502;
-            --green: #2ed573;
-        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            padding: 16px;
+
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: #1f2937;
+            --bg-card-hover: #263044;
+            --accent: #06d6a0;
+            --accent-dim: rgba(6, 214, 160, 0.12);
+            --accent-glow: rgba(6, 214, 160, 0.3);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-dim: #64748b;
+            --border: rgba(255, 255, 255, 0.06);
+            --danger: #ef4444;
+            --danger-dim: rgba(239, 68, 68, 0.12);
+            --warning: #f59e0b;
+            --warning-dim: rgba(245, 158, 11, 0.12);
+            --success: #10b981;
+            --success-dim: rgba(16, 185, 129, 0.12);
+            --info: #3b82f6;
+            --info-dim: rgba(59, 130, 246, 0.12);
+            --radius: 16px;
+            --radius-sm: 10px;
+            --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
         }
-        .header { text-align: center; padding: 16px 0 20px; }
-        .header h1 { font-size: 18px; color: var(--accent); }
-        .header p { font-size: 11px; color: var(--dim); margin-top: 4px; }
-        .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px; }
-        .stat { background: var(--card); border-radius: 12px; padding: 14px 8px; text-align: center; border: 1px solid var(--border); }
-        .stat .n { font-size: 24px; font-weight: 700; color: var(--accent); }
-        .stat .l { font-size: 9px; color: var(--dim); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .tabs { display: flex; gap: 6px; margin-bottom: 16px; }
-        .tab { flex: 1; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: 600; text-align: center; background: var(--card); color: var(--dim); border: 1px solid var(--border); cursor: pointer; }
-        .tab.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
-        .panel { display: none; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Animated background */
+        .bg-gradient {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: 
+                radial-gradient(ellipse at 20% 0%, rgba(6, 214, 160, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 100%, rgba(59, 130, 246, 0.06) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .app {
+            position: relative;
+            z-index: 1;
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 0 16px 100px;
+        }
+
+        /* Header */
+        .header {
+            padding: 24px 0 20px;
+            text-align: center;
+        }
+
+        .header-icon {
+            width: 56px; height: 56px;
+            background: var(--accent-dim);
+            border-radius: 16px;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 12px;
+            font-size: 28px;
+            border: 1px solid rgba(6, 214, 160, 0.2);
+            box-shadow: 0 0 30px var(--accent-glow);
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            background: linear-gradient(135deg, var(--accent), #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-top: 4px;
+            font-weight: 500;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-sm);
+            padding: 16px 10px;
+            text-align: center;
+            border: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card:active {
+            transform: scale(0.96);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            border-radius: 2px 2px 0 0;
+        }
+
+        .stat-card:nth-child(1)::before { background: var(--accent); }
+        .stat-card:nth-child(2)::before { background: var(--info); }
+        .stat-card:nth-child(3)::before { background: var(--warning); }
+
+        .stat-icon {
+            font-size: 20px;
+            margin-bottom: 6px;
+        }
+
+        .stat-value {
+            font-size: 26px;
+            font-weight: 800;
+            color: var(--text-primary);
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-top: 6px;
+            font-weight: 600;
+        }
+
+        /* Navigation Tabs */
+        .nav-tabs {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 4px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .nav-tab {
+            flex: 1;
+            padding: 10px 12px;
+            border-radius: 9px;
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .nav-tab.active {
+            background: var(--bg-card);
+            color: var(--accent);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .nav-tab:not(.active):active {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        /* Panels */
+        .panel {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
         .panel.active { display: block; }
-        .item { background: var(--card); border-radius: 10px; padding: 12px; margin-bottom: 8px; border: 1px solid var(--border); }
-        .item .row { display: flex; justify-content: space-between; align-items: center; }
-        .item .name { font-size: 14px; font-weight: 600; }
-        .item .sub { font-size: 11px; color: var(--dim); margin-top: 3px; }
-        .badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
-        .badge-g { background: rgba(46,213,115,0.15); color: var(--green); }
-        .badge-o { background: rgba(255,165,2,0.15); color: var(--orange); }
-        .badge-r { background: rgba(255,71,87,0.15); color: var(--red); }
-        .audit-net { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--bg); color: var(--accent); font-weight: 700; }
-        .addr { font-size: 11px; color: var(--dim); font-family: monospace; margin-top: 4px; word-break: break-all; }
-        .empty { text-align: center; padding: 30px; color: var(--dim); font-size: 13px; }
-        .info { background: var(--card); border-radius: 10px; padding: 14px; margin-bottom: 16px; border-left: 3px solid var(--accent); font-size: 12px; color: var(--dim); line-height: 1.5; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Section Header */
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding: 0 4px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-secondary);
+        }
+
+        .section-count {
+            font-size: 11px;
+            color: var(--text-dim);
+            background: var(--bg-card);
+            padding: 3px 8px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        /* User Card */
+        .user-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-sm);
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: background 0.2s, transform 0.15s;
+        }
+
+        .user-card:active {
+            transform: scale(0.98);
+            background: var(--bg-card-hover);
+        }
+
+        .user-avatar {
+            width: 40px; height: 40px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .user-avatar.admin {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff;
+        }
+
+        .user-avatar.regular {
+            background: var(--accent-dim);
+            color: var(--accent);
+        }
+
+        .user-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .user-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .user-name .crown {
+            font-size: 12px;
+        }
+
+        .user-meta {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .user-queries {
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .user-queries .count {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .user-queries .label {
+            font-size: 9px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Audit Card */
+        .audit-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-sm);
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            border: 1px solid var(--border);
+            transition: background 0.2s, transform 0.15s;
+        }
+
+        .audit-card:active {
+            transform: scale(0.98);
+            background: var(--bg-card-hover);
+        }
+
+        .audit-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .audit-network {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: var(--accent-dim);
+            color: var(--accent);
+        }
+
+        .audit-network.eth { background: var(--info-dim); color: var(--info); }
+        .audit-network.tron { background: var(--danger-dim); color: var(--danger); }
+        .audit-network.ton { background: var(--accent-dim); color: var(--accent); }
+
+        .risk-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 20px;
+            letter-spacing: 0.3px;
+        }
+
+        .risk-low { background: var(--success-dim); color: var(--success); }
+        .risk-medium { background: var(--warning-dim); color: var(--warning); }
+        .risk-high { background: var(--danger-dim); color: var(--danger); }
+        .risk-critical { background: rgba(220, 38, 38, 0.15); color: #f87171; }
+
+        .audit-address {
+            font-size: 12px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            color: var(--text-secondary);
+            background: var(--bg-primary);
+            padding: 6px 10px;
+            border-radius: 6px;
+            word-break: break-all;
+            margin-bottom: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .audit-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .audit-user {
+            font-size: 11px;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .audit-date {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 48px 24px;
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+
+        .empty-state .title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .empty-state .desc {
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px;
+        }
+
+        .spinner {
+            width: 36px; height: 36px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 12px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading-text {
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        /* Bottom safe area */
+        .safe-bottom { height: env(safe-area-inset-bottom, 20px); }
+
+        /* Pulse animation for live indicator */
+        .live-dot {
+            width: 6px; height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        /* Search */
+        .search-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 10px 14px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .search-box input {
+            flex: 1;
+            background: none;
+            border: none;
+            outline: none;
+            color: var(--text-primary);
+            font-size: 13px;
+            font-family: inherit;
+        }
+
+        .search-box input::placeholder {
+            color: var(--text-dim);
+        }
+
+        .search-icon {
+            color: var(--text-dim);
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🛡 Crypto Threat Watch</h1>
-        <p>Admin Dashboard</p>
-    </div>
+    <div class="bg-gradient"></div>
 
-    <div class="stats">
-        <div class="stat"><div class="n" id="s-users">-</div><div class="l">Users</div></div>
-        <div class="stat"><div class="n" id="s-queries">-</div><div class="l">Queries</div></div>
-        <div class="stat"><div class="n" id="s-audits">-</div><div class="l">Audits</div></div>
-    </div>
+    <div class="app">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-icon">🛡</div>
+            <h1>Crypto Threat Watch</h1>
+            <p><span class="live-dot"></span>Admin Dashboard</p>
+        </div>
 
-    <div class="tabs">
-        <div class="tab active" onclick="showTab('users')">👥 Users</div>
-        <div class="tab" onclick="showTab('audits')">📋 Audits</div>
-    </div>
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">👥</div>
+                <div class="stat-value" id="s-users">—</div>
+                <div class="stat-label">Users</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🔍</div>
+                <div class="stat-value" id="s-queries">—</div>
+                <div class="stat-label">Queries</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">📊</div>
+                <div class="stat-value" id="s-audits">—</div>
+                <div class="stat-label">Audits</div>
+            </div>
+        </div>
 
-    <div class="panel active" id="p-users"></div>
-    <div class="panel" id="p-audits"></div>
+        <!-- Navigation -->
+        <div class="nav-tabs">
+            <div class="nav-tab active" data-tab="users">👥 Users</div>
+            <div class="nav-tab" data-tab="audits">📋 Audits</div>
+            <div class="nav-tab" data-tab="overview">📈 Overview</div>
+        </div>
+
+        <!-- Users Panel -->
+        <div class="panel active" id="panel-users">
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="search-users" placeholder="Search users..." oninput="filterUsers(this.value)">
+            </div>
+            <div class="section-header">
+                <span class="section-title">All Users</span>
+                <span class="section-count" id="users-count">0</span>
+            </div>
+            <div id="users-list">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <div class="loading-text">Loading data...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audits Panel -->
+        <div class="panel" id="panel-audits">
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="search-audits" placeholder="Search by address or network..." oninput="filterAudits(this.value)">
+            </div>
+            <div class="section-header">
+                <span class="section-title">Recent Audits</span>
+                <span class="section-count" id="audits-count">0</span>
+            </div>
+            <div id="audits-list">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <div class="loading-text">Loading audits...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overview Panel -->
+        <div class="panel" id="panel-overview">
+            <div id="overview-content">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <div class="loading-text">Loading overview...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="safe-bottom"></div>
+    </div>
 
     <script>
+        // Telegram WebApp
         const tg = window.Telegram.WebApp;
         tg.ready();
         tg.expand();
+        tg.setHeaderColor('#0a0e1a');
+        tg.setBackgroundColor('#0a0e1a');
 
-        function showTab(name) {
-            document.querySelectorAll('.tab').forEach((t, i) => {
-                t.classList.toggle('active', (name === 'users' && i === 0) || (name === 'audits' && i === 1));
+        // State
+        let allUsers = [];
+        let allAudits = [];
+
+        // Tab Navigation
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const target = tab.dataset.tab;
+                document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('panel-' + target).classList.add('active');
             });
-            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-            document.getElementById('p-' + name).classList.add('active');
-        }
+        });
 
-        // Ma'lumotlarni URL hash dan olish (bot orqali yuboriladi)
+        // Load data from URL hash
         function loadData() {
             try {
                 const hash = window.location.hash.substring(1);
                 if (!hash) {
-                    document.getElementById('p-users').innerHTML = '<div class="info">Ma\'lumotlar yuklanmoqda...<br>Agar ko\'rinmasa, /web buyrug\'ini qayta yuboring.</div>';
+                    showError('No data received. Please use /web command in bot.');
                     return;
                 }
                 const data = JSON.parse(decodeURIComponent(hash));
                 render(data);
-            } catch(e) {
-                document.getElementById('p-users').innerHTML = '<div class="empty">❌ Ma\'lumotlarni o\'qishda xatolik: ' + e.message + '</div>';
+            } catch (e) {
+                showError('Failed to parse data: ' + e.message);
             }
+        }
+
+        function showError(msg) {
+            document.getElementById('users-list').innerHTML = `
+                <div class="empty-state">
+                    <div class="icon">⚠️</div>
+                    <div class="title">Connection Error</div>
+                    <div class="desc">${msg}</div>
+                </div>`;
         }
 
         function render(data) {
             const stats = data.stats || {};
-            const users = data.users || [];
-            const audits = data.audits || [];
+            allUsers = data.users || [];
+            allAudits = data.audits || [];
 
-            document.getElementById('s-users').textContent = stats.total_users || users.length || 0;
-            document.getElementById('s-queries').textContent = stats.total_queries || 0;
-            document.getElementById('s-audits').textContent = stats.total_audits || audits.length || 0;
+            // Animate stats
+            animateNumber('s-users', stats.total_users || allUsers.length || 0);
+            animateNumber('s-queries', stats.total_queries || 0);
+            animateNumber('s-audits', stats.total_audits || allAudits.length || 0);
 
-            // Users
-            const uel = document.getElementById('p-users');
-            uel.innerHTML = users.length ? users.map(u => `
-                <div class="item">
-                    <div class="row">
-                        <span class="name">${u.is_admin ? '👑 ' : ''}${u.alias}</span>
-                        <span class="badge badge-o">${u.query_count} req</span>
-                    </div>
-                    <div class="sub">@${u.username || 'noname'} • ${(u.registered_at || '').slice(0, 10)}</div>
-                </div>
-            `).join('') : '<div class="empty">Foydalanuvchilar yo\'q</div>';
-
-            // Audits
-            const ael = document.getElementById('p-audits');
-            ael.innerHTML = audits.length ? audits.map(a => {
-                let bc = 'badge-g';
-                if (a.risk_level && a.risk_level.includes('CRITICAL')) bc = 'badge-r';
-                else if (a.risk_level && a.risk_level.includes('HIGH')) bc = 'badge-r';
-                else if (a.risk_level && a.risk_level.includes('MEDIUM')) bc = 'badge-o';
-                return `
-                    <div class="item">
-                        <div class="row">
-                            <span class="audit-net">${a.network}</span>
-                            <span class="badge ${bc}">${a.risk_level || '🟢 LOW'}</span>
-                        </div>
-                        <div class="addr">${a.address}</div>
-                        <div class="sub">👤 ${a.alias || '?'} • ${(a.created_at || '').slice(0, 16)}</div>
-                    </div>
-                `;
-            }).join('') : '<div class="empty">Auditlar yo\'q</div>';
+            renderUsers(allUsers);
+            renderAudits(allAudits);
+            renderOverview(stats, allUsers, allAudits);
         }
 
+        function animateNumber(id, target) {
+            const el = document.getElementById(id);
+            const duration = 600;
+            const start = performance.now();
+            const from = 0;
+
+            function update(now) {
+                const progress = Math.min((now - start) / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                el.textContent = Math.round(from + (target - from) * eased);
+                if (progress < 1) requestAnimationFrame(update);
+            }
+            requestAnimationFrame(update);
+        }
+
+        function renderUsers(users) {
+            const container = document.getElementById('users-list');
+            document.getElementById('users-count').textContent = users.length;
+
+            if (!users.length) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">👥</div>
+                        <div class="title">No users yet</div>
+                        <div class="desc">Users will appear here after registration</div>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = users.map((u, i) => {
+                const isAdmin = u.is_admin;
+                const initial = (u.alias || '?')[0].toUpperCase();
+                const date = (u.registered_at || '').slice(0, 10);
+                const username = u.username ? '@' + u.username : 'no username';
+
+                return `
+                    <div class="user-card" style="animation-delay: ${i * 30}ms">
+                        <div class="user-avatar ${isAdmin ? 'admin' : 'regular'}">${initial}</div>
+                        <div class="user-info">
+                            <div class="user-name">
+                                ${u.alias}
+                                ${isAdmin ? '<span class="crown">👑</span>' : ''}
+                            </div>
+                            <div class="user-meta">${username} • Joined ${date}</div>
+                        </div>
+                        <div class="user-queries">
+                            <div class="count">${u.query_count || 0}</div>
+                            <div class="label">queries</div>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        function renderAudits(audits) {
+            const container = document.getElementById('audits-list');
+            document.getElementById('audits-count').textContent = audits.length;
+
+            if (!audits.length) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">📋</div>
+                        <div class="title">No audits yet</div>
+                        <div class="desc">Audit results will appear here</div>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = audits.map((a, i) => {
+                const network = (a.network || 'UNKNOWN').toUpperCase();
+                const netClass = network.toLowerCase();
+                const riskLevel = (a.risk_level || 'LOW').toUpperCase();
+                let riskClass = 'risk-low';
+                if (riskLevel.includes('CRITICAL')) riskClass = 'risk-critical';
+                else if (riskLevel.includes('HIGH')) riskClass = 'risk-high';
+                else if (riskLevel.includes('MEDIUM')) riskClass = 'risk-medium';
+
+                const netIcon = network === 'ETH' ? '⟠' : network === 'TRON' ? '◈' : '💎';
+                const date = (a.created_at || '').slice(0, 16).replace('T', ' ');
+
+                return `
+                    <div class="audit-card" style="animation-delay: ${i * 30}ms">
+                        <div class="audit-top">
+                            <span class="audit-network ${netClass}">${netIcon} ${network}</span>
+                            <span class="risk-badge ${riskClass}">${riskLevel}</span>
+                        </div>
+                        <div class="audit-address">${a.address || '—'}</div>
+                        <div class="audit-footer">
+                            <span class="audit-user">👤 ${a.alias || 'Unknown'}</span>
+                            <span class="audit-date">📅 ${date}</span>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        function renderOverview(stats, users, audits) {
+            const container = document.getElementById('overview-content');
+
+            // Network distribution
+            const networks = {};
+            audits.forEach(a => {
+                const net = (a.network || 'unknown').toUpperCase();
+                networks[net] = (networks[net] || 0) + 1;
+            });
+
+            // Risk distribution
+            const risks = { LOW: 0, MEDIUM: 0, HIGH: 0, CRITICAL: 0 };
+            audits.forEach(a => {
+                const level = (a.risk_level || 'LOW').toUpperCase();
+                if (level.includes('CRITICAL')) risks.CRITICAL++;
+                else if (level.includes('HIGH')) risks.HIGH++;
+                else if (level.includes('MEDIUM')) risks.MEDIUM++;
+                else risks.LOW++;
+            });
+
+            // Top users
+            const topUsers = [...users].sort((a, b) => (b.query_count || 0) - (a.query_count || 0)).slice(0, 5);
+
+            const totalAudits = audits.length || 1;
+
+            container.innerHTML = `
+                <div class="section-header">
+                    <span class="section-title">Network Distribution</span>
+                </div>
+                ${Object.entries(networks).map(([net, count]) => {
+                    const pct = Math.round((count / totalAudits) * 100);
+                    const color = net === 'ETH' ? 'var(--info)' : net === 'TRON' ? 'var(--danger)' : 'var(--accent)';
+                    return `
+                        <div style="background: var(--bg-card); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 8px; border: 1px solid var(--border);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <span style="font-size: 13px; font-weight: 600;">${net}</span>
+                                <span style="font-size: 12px; color: var(--text-dim);">${count} (${pct}%)</span>
+                            </div>
+                            <div style="height: 4px; background: var(--bg-primary); border-radius: 2px; overflow: hidden;">
+                                <div style="height: 100%; width: ${pct}%; background: ${color}; border-radius: 2px; transition: width 0.6s ease;"></div>
+                            </div>
+                        </div>`;
+                }).join('')}
+
+                <div class="section-header" style="margin-top: 20px;">
+                    <span class="section-title">Risk Levels</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px;">
+                    <div style="background: var(--bg-card); border-radius: var(--radius-sm); padding: 14px; border: 1px solid var(--border); text-align: center;">
+                        <div style="font-size: 22px; font-weight: 700; color: var(--success);">${risks.LOW}</div>
+                        <div style="font-size: 10px; color: var(--text-dim); margin-top: 4px;">🟢 LOW</div>
+                    </div>
+                    <div style="background: var(--bg-card); border-radius: var(--radius-sm); padding: 14px; border: 1px solid var(--border); text-align: center;">
+                        <div style="font-size: 22px; font-weight: 700; color: var(--warning);">${risks.MEDIUM}</div>
+                        <div style="font-size: 10px; color: var(--text-dim); margin-top: 4px;">🟡 MEDIUM</div>
+                    </div>
+                    <div style="background: var(--bg-card); border-radius: var(--radius-sm); padding: 14px; border: 1px solid var(--border); text-align: center;">
+                        <div style="font-size: 22px; font-weight: 700; color: var(--danger);">${risks.HIGH}</div>
+                        <div style="font-size: 10px; color: var(--text-dim); margin-top: 4px;">🔴 HIGH</div>
+                    </div>
+                    <div style="background: var(--bg-card); border-radius: var(--radius-sm); padding: 14px; border: 1px solid var(--border); text-align: center;">
+                        <div style="font-size: 22px; font-weight: 700; color: #f87171;">${risks.CRITICAL}</div>
+                        <div style="font-size: 10px; color: var(--text-dim); margin-top: 4px;">⛔ CRITICAL</div>
+                    </div>
+                </div>
+
+                <div class="section-header">
+                    <span class="section-title">Top Users</span>
+                </div>
+                ${topUsers.map((u, i) => `
+                    <div style="background: var(--bg-card); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 6px; border: 1px solid var(--border); display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 16px; font-weight: 700; color: var(--text-dim); width: 20px;">#${i + 1}</span>
+                        <span style="flex: 1; font-size: 13px; font-weight: 600;">${u.alias}${u.is_admin ? ' 👑' : ''}</span>
+                        <span style="font-size: 14px; font-weight: 700; color: var(--accent);">${u.query_count || 0}</span>
+                    </div>
+                `).join('')}
+            `;
+        }
+
+        // Search/Filter
+        function filterUsers(query) {
+            const q = query.toLowerCase();
+            const filtered = allUsers.filter(u =>
+                (u.alias || '').toLowerCase().includes(q) ||
+                (u.username || '').toLowerCase().includes(q)
+            );
+            renderUsers(filtered);
+        }
+
+        function filterAudits(query) {
+            const q = query.toLowerCase();
+            const filtered = allAudits.filter(a =>
+                (a.address || '').toLowerCase().includes(q) ||
+                (a.network || '').toLowerCase().includes(q) ||
+                (a.alias || '').toLowerCase().includes(q)
+            );
+            renderAudits(filtered);
+        }
+
+        // Init
         loadData();
     </script>
 </body>
