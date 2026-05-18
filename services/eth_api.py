@@ -2,6 +2,7 @@
 
 import httpx
 import logging
+import asyncio
 
 from config import ETHERSCAN_API_KEY
 from services import safe_request, DEFAULT_TIMEOUT

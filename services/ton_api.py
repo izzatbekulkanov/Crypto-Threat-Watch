@@ -2,6 +2,7 @@
 
 import httpx
 import logging
+import asyncio
 from datetime import datetime, timezone
 
 from config import TON_API_KEY

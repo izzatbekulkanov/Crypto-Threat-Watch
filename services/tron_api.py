@@ -2,6 +2,7 @@
 
 import httpx
 import logging
+import asyncio
 
 from config import TRONGRID_API_KEY
 from services import safe_request, DEFAULT_TIMEOUT
