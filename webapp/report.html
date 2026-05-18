@@ -379,8 +379,8 @@
 
             if (d.y && Object.keys(d.y).length > 0) {
                 html += `<div class="chart-container">
-                    <div class="sec-title">${t.chart_title}</div>
-                    <div style="position: relative; height: 180px; width: 100%;">
+                    <div class="sec-title" style="margin-bottom: 20px;">${t.chart_title}</div>
+                    <div style="position: relative; height: 140px; width: 100%;">
                         <canvas id="yearlyChart"></canvas>
                     </div>
                 </div>`;
@@ -418,13 +418,41 @@
                 const inData = years.map(y => d.y[y].in);
                 const outData = years.map(y => d.y[y].out);
 
+                const gradIn = ctx.createLinearGradient(0, 0, 0, 140);
+                gradIn.addColorStop(0, 'rgba(0, 229, 160, 0.4)');
+                gradIn.addColorStop(1, 'rgba(0, 229, 160, 0.0)');
+
+                const gradOut = ctx.createLinearGradient(0, 0, 0, 140);
+                gradOut.addColorStop(0, 'rgba(255, 77, 106, 0.4)');
+                gradOut.addColorStop(1, 'rgba(255, 77, 106, 0.0)');
+
                 new Chart(ctx, {
-                    type: 'bar',
+                    type: 'line',
                     data: {
                         labels: years,
                         datasets: [
-                            { label: t.tin, data: inData, backgroundColor: '#00e5a0', borderRadius: 4 },
-                            { label: t.tout, data: outData, backgroundColor: '#ff4d6a', borderRadius: 4 }
+                            { 
+                                label: t.tin, 
+                                data: inData, 
+                                borderColor: '#00e5a0', 
+                                backgroundColor: gradIn, 
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 0,
+                                pointHoverRadius: 6
+                            },
+                            { 
+                                label: t.tout, 
+                                data: outData, 
+                                borderColor: '#ff4d6a', 
+                                backgroundColor: gradOut, 
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 0,
+                                pointHoverRadius: 6
+                            }
                         ]
                     },
                     options: {
@@ -432,13 +460,33 @@
                         maintainAspectRatio: false,
                         interaction: { intersect: false, mode: 'index' },
                         plugins: {
-                            legend: { labels: { color: '#a0aec0', font: { family: 'Inter' } } },
-                            tooltip: { backgroundColor: '#151a2e', titleColor: '#eef2ff', bodyColor: '#a0aec0', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }
+                            legend: { display: false },
+                            tooltip: { 
+                                backgroundColor: 'rgba(15, 19, 32, 0.9)', 
+                                titleColor: '#eef2ff', 
+                                bodyColor: '#a0aec0', 
+                                borderColor: 'rgba(255,255,255,0.05)', 
+                                borderWidth: 1,
+                                padding: 12,
+                                cornerRadius: 10,
+                                titleFont: { size: 13, family: 'Inter', weight: 'bold' },
+                                bodyFont: { size: 13, family: 'Inter' },
+                                displayColors: true,
+                                boxPadding: 4,
+                                usePointStyle: true
+                            }
                         },
                         scales: {
-                            x: { grid: { display: false }, ticks: { color: '#a0aec0' } },
-                            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#a0aec0' } }
-                        }
+                            x: { 
+                                grid: { display: false, drawBorder: false }, 
+                                ticks: { color: '#5a6578', font: { family: 'Inter', size: 11, weight: '600' } } 
+                            },
+                            y: { 
+                                display: false,
+                                grid: { display: false, drawBorder: false }
+                            }
+                        },
+                        layout: { padding: { left: -10, right: 0, top: 10, bottom: 0 } }
                     }
                 });
             }
