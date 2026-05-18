@@ -163,6 +163,29 @@
 
         .chart-container { background: var(--bg-card); border-radius: 14px; padding: 16px; border: 1px solid var(--border); margin-bottom: 24px; animation: fadeUp 0.6s 0.35s both; }
         
+        /* Advanced Yearly UI */
+        .year-card {
+            background: var(--bg-2);
+            border-radius: 12px;
+            padding: 14px;
+            border: 1px solid var(--border);
+            margin-bottom: 10px;
+        }
+        .yc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .yc-year { font-size: 15px; font-weight: 800; color: var(--text); }
+        .yc-net { font-size: 13px; font-weight: 700; padding: 4px 8px; border-radius: 6px; }
+        .yc-net.pos { color: var(--green); background: var(--green-dim); }
+        .yc-net.neg { color: var(--red); background: var(--red-dim); }
+        
+        .yc-bars { display: flex; flex-direction: column; gap: 8px; }
+        .yc-bar-row { display: flex; align-items: center; gap: 10px; }
+        .yc-lbl { font-size: 11px; font-weight: 600; color: var(--text-3); width: 24px; }
+        .yc-val { font-size: 12px; font-weight: 700; color: var(--text); width: 50px; text-align: right; }
+        .yc-bar-track { flex: 1; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; position: relative; }
+        .yc-bar-fill { height: 100%; border-radius: 3px; position: absolute; left: 0; top: 0; }
+        .yc-bar-fill.in { background: var(--green); }
+        .yc-bar-fill.out { background: var(--red); }
+        
         /* Tokens */
         .sec-title { font-size: 14px; font-weight: 700; color: var(--text-2); margin-bottom: 12px; padding: 0 4px; }
 
@@ -380,10 +403,58 @@
             if (d.y && Object.keys(d.y).length > 0) {
                 html += `<div class="chart-container">
                     <div class="sec-title" style="margin-bottom: 20px;">${t.chart_title}</div>
-                    <div style="position: relative; height: 140px; width: 100%;">
+                    <div style="position: relative; height: 140px; width: 100%; margin-bottom: 24px;">
                         <canvas id="yearlyChart"></canvas>
                     </div>
-                </div>`;
+                    <div class="yearly-history">`;
+                
+                const years = Object.keys(d.y).sort().reverse(); // Eng so'nggi yil birinchi
+                
+                // Max sum to calculate percentages
+                let maxVal = 0;
+                years.forEach(y => {
+                    const total = d.y[y].in + d.y[y].out;
+                    if (total > maxVal) maxVal = total;
+                });
+
+                years.forEach(y => {
+                    const yIn = d.y[y].in;
+                    const yOut = d.y[y].out;
+                    const net = yIn - yOut;
+                    
+                    const inPct = maxVal > 0 ? (yIn / maxVal) * 100 : 0;
+                    const outPct = maxVal > 0 ? (yOut / maxVal) * 100 : 0;
+                    
+                    const netCls = net >= 0 ? 'pos' : 'neg';
+                    const netSign = net >= 0 ? '+' : '';
+                    
+                    html += `
+                        <div class="year-card">
+                            <div class="yc-header">
+                                <div class="yc-year">${y}</div>
+                                <div class="yc-net ${netCls}">${netSign} ${net.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+                            </div>
+                            <div class="yc-bars">
+                                <div class="yc-bar-row">
+                                    <span class="yc-lbl">IN</span>
+                                    <div class="yc-bar-track">
+                                        <div class="yc-bar-fill in" style="width: ${inPct}%"></div>
+                                    </div>
+                                    <span class="yc-val">${yIn >= 1000 ? (yIn/1000).toFixed(1)+'k' : yIn.toFixed(1)}</span>
+                                </div>
+                                <div class="yc-bar-row">
+                                    <span class="yc-lbl">OUT</span>
+                                    <div class="yc-bar-track">
+                                        <div class="yc-bar-fill out" style="width: ${outPct}%"></div>
+                                    </div>
+                                    <span class="yc-val">${yOut >= 1000 ? (yOut/1000).toFixed(1)+'k' : yOut.toFixed(1)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `</div></div>`;
             }
 
             if (d.tk && d.tk.length > 0) {
