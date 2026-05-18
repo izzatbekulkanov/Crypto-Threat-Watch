@@ -767,12 +767,11 @@
     // ═══ Data Loading ═══
     function loadData() {
         try {
-            // Hash'ni olib, Telegram tomonidan qo'shilgan qo'shimchalarni tozalash
-            let rawHash = window.location.hash.substring(1);
-            // Telegram ba'zan "?" qo'shishi mumkin — faqat base64 qismini olamiz
-            rawHash = rawHash.split('?')[0].split('&')[0].trim();
+            // Query param "?d=" dan ma'lumot olish (Telegram hash'ni o'chiradi!)
+            const params = new URLSearchParams(window.location.search);
+            const rawData = params.get('d') || '';
 
-            if (!rawHash) {
+            if (!rawData) {
                 showEmpty('list-users', 'No data', 'Use /web command in bot to open this panel.');
                 return;
             }
@@ -789,7 +788,7 @@
                 for (let i = 0; i < str.length; i++) {
                     const c = str[i];
                     if (c === '=') break;
-                    if (!(c in lookup)) continue; // noto'g'ri belgilarni o'tkazib yuborish
+                    if (!(c in lookup)) continue;
                     buf = (buf << 6) | lookup[c];
                     bits += 6;
                     if (bits >= 8) {
@@ -800,7 +799,7 @@
                 return new Uint8Array(bytes);
             }
 
-            const bytes = base64urlDecodeToBytes(rawHash);
+            const bytes = base64urlDecodeToBytes(rawData);
             const jsonStr = new TextDecoder('utf-8').decode(bytes);
             const compact = JSON.parse(jsonStr);
 

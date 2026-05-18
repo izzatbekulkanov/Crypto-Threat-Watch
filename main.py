@@ -428,34 +428,26 @@ async def cmd_web(message: types.Message) -> None:
         "a": compact_audits,
     }
 
-    data_json: str = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
+    def _encode(d: dict) -> str:
+        """Dict -> URL-safe base64 (UTF-8, padding yo'q)."""
+        json_bytes = json.dumps(d, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+        return base64.urlsafe_b64encode(json_bytes).decode().rstrip('=')
 
-    # Base64 encode (standart, padding olib tashlangan, URL-safe qilingan)
-    data_b64: str = base64.b64encode(data_json.encode()).decode().rstrip('=')
-    # + belgisini URL-safe qilish
-    data_b64 = data_b64.replace('+', '-').replace('/', '_')
-
-    # GitHub Pages URL + data hash
+    # GitHub Pages URL + data (query param orqali, hash emas — Telegram hash'ni o'chiradi)
     base_url: str = WEBAPP_URL.rstrip("/") + "/index.html"
-    webapp_url: str = f"{base_url}#{data_b64}"
+    data_b64: str = _encode(data)
+    webapp_url: str = f"{base_url}?d={data_b64}"
 
     # Telegram URL limit tekshiruvi (~2048)
     if len(webapp_url) > 2048:
-        # Auditlarni kamaytirish
-        compact_audits = compact_audits[:10]
-        data["a"] = compact_audits
-        data_json = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
-        data_b64 = base64.b64encode(data_json.encode()).decode().rstrip('=')
-        data_b64 = data_b64.replace('+', '-').replace('/', '_')
-        webapp_url = f"{base_url}#{data_b64}"
+        data["a"] = compact_audits[:10]
+        data_b64 = _encode(data)
+        webapp_url = f"{base_url}?d={data_b64}"
 
     if len(webapp_url) > 2048:
-        # Hali ham katta — faqat stats
         data = {"s": stats, "u": compact_users[:5], "a": compact_audits[:5]}
-        data_json = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
-        data_b64 = base64.b64encode(data_json.encode()).decode().rstrip('=')
-        data_b64 = data_b64.replace('+', '-').replace('/', '_')
-        webapp_url = f"{base_url}#{data_b64}"
+        data_b64 = _encode(data)
+        webapp_url = f"{base_url}?d={data_b64}"
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
