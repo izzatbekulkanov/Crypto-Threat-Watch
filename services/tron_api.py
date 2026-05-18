@@ -104,6 +104,8 @@ async def get_tron_usdt_balance(address: str) -> dict:
                 fingerprint = trx_data.get("meta", {}).get("fingerprint")
                 if not fingerprint:
                     break
+                
+                await asyncio.sleep(0.5)
         except Exception as e:
             logger.warning(f"TRON TRX transactions error: {e}")
 
@@ -152,6 +154,7 @@ async def get_tron_usdt_balance(address: str) -> dict:
                 fingerprint = trc20_data.get("meta", {}).get("fingerprint")
                 if not fingerprint:
                     break
+                await asyncio.sleep(0.5)
         except Exception as e:
             logger.warning(f"TRON TRC-20 fetch error: {e}")
 

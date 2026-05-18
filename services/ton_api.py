@@ -129,6 +129,9 @@ async def get_ton_balance(address: str) -> dict:
                     break
                 before_lt = last_lt
                 
+                # ISO Standart: API Limitni buzmaslik uchun xavfsiz kutish
+                await asyncio.sleep(0.5)
+                
         except Exception as e:
             logger.warning(f"TON transactions fetch error: {e}")
 

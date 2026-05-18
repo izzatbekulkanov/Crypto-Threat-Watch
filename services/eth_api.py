@@ -105,6 +105,7 @@ async def get_eth_balance(address: str) -> dict:
                 if len(transactions) < 10000:
                     break
                 page += 1
+                await asyncio.sleep(0.5)
 
         except Exception as e:
             logger.warning(f"ETH txlist fetch error: {e}")

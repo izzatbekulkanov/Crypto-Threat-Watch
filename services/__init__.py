@@ -9,8 +9,8 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 # Umumiy HTTP client sozlamalari
 DEFAULT_TIMEOUT: float = 30.0
-MAX_RETRIES: int = 3
-RETRY_DELAY: float = 1.0
+MAX_RETRIES: int = 5
+RETRY_DELAY: float = 2.0
 
 
 async def safe_request(
