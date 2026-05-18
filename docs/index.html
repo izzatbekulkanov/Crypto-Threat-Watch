@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Crypto Threat Watch — Admin</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg: #0f0f23;
+            --card: #1c1c3a;
+            --accent: #00d4aa;
+            --text: #e8e8ff;
+            --dim: #8888aa;
+            --border: #2a2a50;
+            --red: #ff4757;
+            --orange: #ffa502;
+            --green: #2ed573;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 16px;
+        }
+        .header { text-align: center; padding: 16px 0 20px; }
+        .header h1 { font-size: 18px; color: var(--accent); }
+        .header p { font-size: 11px; color: var(--dim); margin-top: 4px; }
+        .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+        .stat { background: var(--card); border-radius: 12px; padding: 14px 8px; text-align: center; border: 1px solid var(--border); }
+        .stat .n { font-size: 24px; font-weight: 700; color: var(--accent); }
+        .stat .l { font-size: 9px; color: var(--dim); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+        .tab { flex: 1; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: 600; text-align: center; background: var(--card); color: var(--dim); border: 1px solid var(--border); cursor: pointer; }
+        .tab.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .item { background: var(--card); border-radius: 10px; padding: 12px; margin-bottom: 8px; border: 1px solid var(--border); }
+        .item .row { display: flex; justify-content: space-between; align-items: center; }
+        .item .name { font-size: 14px; font-weight: 600; }
+        .item .sub { font-size: 11px; color: var(--dim); margin-top: 3px; }
+        .badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+        .badge-g { background: rgba(46,213,115,0.15); color: var(--green); }
+        .badge-o { background: rgba(255,165,2,0.15); color: var(--orange); }
+        .badge-r { background: rgba(255,71,87,0.15); color: var(--red); }
+        .audit-net { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--bg); color: var(--accent); font-weight: 700; }
+        .addr { font-size: 11px; color: var(--dim); font-family: monospace; margin-top: 4px; word-break: break-all; }
+        .empty { text-align: center; padding: 30px; color: var(--dim); font-size: 13px; }
+        .info { background: var(--card); border-radius: 10px; padding: 14px; margin-bottom: 16px; border-left: 3px solid var(--accent); font-size: 12px; color: var(--dim); line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🛡 Crypto Threat Watch</h1>
+        <p>Admin Dashboard</p>
+    </div>
+
+    <div class="stats">
+        <div class="stat"><div class="n" id="s-users">-</div><div class="l">Users</div></div>
+        <div class="stat"><div class="n" id="s-queries">-</div><div class="l">Queries</div></div>
+        <div class="stat"><div class="n" id="s-audits">-</div><div class="l">Audits</div></div>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="showTab('users')">👥 Users</div>
+        <div class="tab" onclick="showTab('audits')">📋 Audits</div>
+    </div>
+
+    <div class="panel active" id="p-users"></div>
+    <div class="panel" id="p-audits"></div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        function showTab(name) {
+            document.querySelectorAll('.tab').forEach((t, i) => {
+                t.classList.toggle('active', (name === 'users' && i === 0) || (name === 'audits' && i === 1));
+            });
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.getElementById('p-' + name).classList.add('active');
+        }
+
+        // Ma'lumotlarni URL hash dan olish (bot orqali yuboriladi)
+        function loadData() {
+            try {
+                const hash = window.location.hash.substring(1);
+                if (!hash) {
+                    document.getElementById('p-users').innerHTML = '<div class="info">Ma\'lumotlar yuklanmoqda...<br>Agar ko\'rinmasa, /web buyrug\'ini qayta yuboring.</div>';
+                    return;
+                }
+                const data = JSON.parse(decodeURIComponent(hash));
+                render(data);
+            } catch(e) {
+                document.getElementById('p-users').innerHTML = '<div class="empty">❌ Ma\'lumotlarni o\'qishda xatolik: ' + e.message + '</div>';
+            }
+        }
+
+        function render(data) {
+            const stats = data.stats || {};
+            const users = data.users || [];
+            const audits = data.audits || [];
+
+            document.getElementById('s-users').textContent = stats.total_users || users.length || 0;
+            document.getElementById('s-queries').textContent = stats.total_queries || 0;
+            document.getElementById('s-audits').textContent = stats.total_audits || audits.length || 0;
+
+            // Users
+            const uel = document.getElementById('p-users');
+            uel.innerHTML = users.length ? users.map(u => `
+                <div class="item">
+                    <div class="row">
+                        <span class="name">${u.is_admin ? '👑 ' : ''}${u.alias}</span>
+                        <span class="badge badge-o">${u.query_count} req</span>
+                    </div>
+                    <div class="sub">@${u.username || 'noname'} • ${(u.registered_at || '').slice(0, 10)}</div>
+                </div>
+            `).join('') : '<div class="empty">Foydalanuvchilar yo\'q</div>';
+
+            // Audits
+            const ael = document.getElementById('p-audits');
+            ael.innerHTML = audits.length ? audits.map(a => {
+                let bc = 'badge-g';
+                if (a.risk_level && a.risk_level.includes('CRITICAL')) bc = 'badge-r';
+                else if (a.risk_level && a.risk_level.includes('HIGH')) bc = 'badge-r';
+                else if (a.risk_level && a.risk_level.includes('MEDIUM')) bc = 'badge-o';
+                return `
+                    <div class="item">
+                        <div class="row">
+                            <span class="audit-net">${a.network}</span>
+                            <span class="badge ${bc}">${a.risk_level || '🟢 LOW'}</span>
+                        </div>
+                        <div class="addr">${a.address}</div>
+                        <div class="sub">👤 ${a.alias || '?'} • ${(a.created_at || '').slice(0, 16)}</div>
+                    </div>
+                `;
+            }).join('') : '<div class="empty">Auditlar yo\'q</div>';
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
