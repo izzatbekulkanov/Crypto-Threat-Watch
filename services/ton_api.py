@@ -39,6 +39,7 @@ async def get_ton_balance(address: str) -> dict:
 
     async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
         # ═══ 1. Hozirgi balans (tonapi.io) ═══
+        raw_address: str = ""  # "0:..." formatdagi xom manzil (taqqoslash uchun)
         try:
             resp = await safe_request(
                 client, "GET", f"{_TONAPI_URL}/accounts/{address}", headers=_HEADERS
@@ -47,6 +48,8 @@ async def get_ton_balance(address: str) -> dict:
             balance_nano: int = int(account_data.get("balance", 0))
             current_balance = balance_nano / _NANOTON_DIVISOR
             account_status = account_data.get("status", "unknown")
+            # tonapi "0:hex..." formatida qaytaradi — transfer taqqoslash uchun saqlaymiz
+            raw_address = account_data.get("address", "").lower()
         except Exception as e:
             logger.error(f"TON account fetch error: {e}")
             return {"network": "TON", "address": address, "error": str(e)}
@@ -114,16 +117,25 @@ async def get_ton_balance(address: str) -> dict:
 
                     in_msg: dict | None = tx.get("in_msg")
                     if in_msg and in_msg.get("value"):
-                        val = int(in_msg["value"])
-                        total_in += val
-                        yearly_stats[year]["in"] += val / _NANOTON_DIVISOR
+                        # Faqat tashqi manzildan kelgan kirimlarni hisoblash
+                        # (o'z-o'ziga yuborishni chiqarib tashlash)
+                        src = (in_msg.get("source") or {})
+                        src_addr = src.get("address", "").lower() if isinstance(src, dict) else ""
+                        if src_addr != raw_address:
+                            val = int(in_msg["value"])
+                            total_in += val
+                            yearly_stats[year]["in"] += val / _NANOTON_DIVISOR
 
                     out_msgs: list[dict] = tx.get("out_msgs", [])
                     for msg in out_msgs:
                         if msg.get("value"):
-                            val = int(msg["value"])
-                            total_out += val
-                            yearly_stats[year]["out"] += val / _NANOTON_DIVISOR
+                            # Faqat tashqi manzilga ketgan chiqimlarni hisoblash
+                            dest = (msg.get("destination") or {})
+                            dest_addr = dest.get("address", "").lower() if isinstance(dest, dict) else ""
+                            if dest_addr != raw_address:
+                                val = int(msg["value"])
+                                total_out += val
+                                yearly_stats[year]["out"] += val / _NANOTON_DIVISOR
                             
                 last_lt = transactions[-1].get("lt")
                 if not last_lt:
@@ -136,7 +148,7 @@ async def get_ton_balance(address: str) -> dict:
         except Exception as e:
             logger.warning(f"TON transactions fetch error: {e}")
 
-        # ═══ 4. Jetton balanslar ═══
+        # ═══ 4. Jetton balanslar + transfer tarixi ═══
         try:
             resp = await safe_request(
                 client, "GET",
@@ -144,18 +156,70 @@ async def get_ton_balance(address: str) -> dict:
                 headers=_HEADERS,
             )
             jetton_data: dict = resp.json()
+
             for item in jetton_data.get("balances", []):
                 jetton_info: dict = item.get("jetton", {})
                 symbol: str = jetton_info.get("symbol", "UNKNOWN")
                 decimals: int = int(jetton_info.get("decimals", 9))
+                divisor: float = 10 ** decimals
                 raw_balance: int = int(item.get("balance", "0"))
-                token_balance: float = raw_balance / (10 ** decimals)
+                token_balance: float = raw_balance / divisor
 
-                if token_balance > 0.0001:
-                    jetton_balances.append({
-                        "symbol": symbol,
-                        "balance": f"{token_balance:,.4f}",
-                    })
+                if token_balance < 0.00001:
+                    continue
+
+                # Jetton kontrakti manzili (transfer tarixi so'rash uchun)
+                jetton_address: str = jetton_info.get("address", "")
+
+                # Bu jetton bo'yicha barcha transferlarni yuklab olish
+                j_in_nano: int = 0
+                j_out_nano: int = 0
+                try:
+                    j_cursor = None
+                    for _ in range(50):  # Maks 5000 transfer
+                        j_params: dict = {"limit": 100, "direction": "all"}
+                        if j_cursor:
+                            j_params["cursor"] = j_cursor
+                        j_resp = await safe_request(
+                            client, "GET",
+                            f"{_TONAPI_URL}/accounts/{address}/jettons/{jetton_address}/history",
+                            headers=_HEADERS,
+                            params=j_params,
+                        )
+                        j_data: dict = j_resp.json()
+                        events: list[dict] = j_data.get("events", [])
+                        if not events:
+                            break
+                        for event in events:
+                            for action in event.get("actions", []):
+                                jt = action.get("JettonTransfer", {})
+                                if not jt:
+                                    continue
+                                amt_raw: int = int(jt.get("amount", 0))
+                                sender = (jt.get("sender") or {}).get("address", "").lower()
+                                recipient = (jt.get("recipient") or {}).get("address", "").lower()
+                                if sender == raw_address:
+                                    j_out_nano += amt_raw
+                                elif recipient == raw_address:
+                                    j_in_nano += amt_raw
+                        next_cursor = j_data.get("next_from")
+                        if not next_cursor:
+                            break
+                        j_cursor = next_cursor
+                        await asyncio.sleep(0.3)
+                except Exception as je:
+                    logger.warning(f"Jetton {symbol} transfer history error: {je}")
+
+                j_income: float = j_in_nano / divisor
+                j_outcome: float = j_out_nano / divisor
+
+                jetton_balances.append({
+                    "symbol": symbol,
+                    "balance": f"{token_balance:,.4f}",
+                    "income": f"{j_income:,.4f} {symbol}",
+                    "outcome": f"{j_outcome:,.4f} {symbol}",
+                    "volume": f"{(j_income + j_outcome):,.4f} {symbol}",
+                })
         except Exception as e:
             logger.warning(f"TON jettons fetch error: {e}")
 

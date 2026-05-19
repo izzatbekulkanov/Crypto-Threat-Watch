@@ -562,21 +562,17 @@ async def handle_link(message: types.Message, state: FSMContext) -> None:
         if tokens:
             report += t("result_tokens_header", lang)
             for tk in tokens:
-                if "balance" in tk and "income" not in tk:
-                    # TON jetton formati (faqat balans)
-                    report += f"• *{tk['symbol']}*: `{tk['balance']}`\n"
-                else:
-                    # ETH/TRON token formati (to'liq)
-                    symbol: str = tk.get("symbol", "?")
-                    income: str = tk.get("income", "0")
-                    outcome: str = tk.get("outcome", "0")
-                    volume: str = tk.get("volume", "0")
-                    current: str = tk.get("current_balance", "")
+                symbol: str = tk.get("symbol", "?")
+                current: str = tk.get("balance", "") or tk.get("current_balance", "")
+                income: str = tk.get("income", "")
+                outcome: str = tk.get("outcome", "")
+                volume: str = tk.get("volume", "")
 
-                    report += f"• *{symbol}*"
-                    if current and current != "—":
-                        report += f" (💎 `{current}`)"
-                    report += "\n"
+                report += f"• *{symbol}*"
+                if current and current not in ("—", "0.0000"):
+                    report += f": 💎 `{current}`"
+                report += "\n"
+                if income or outcome:
                     report += f"  📥 `{income}` | 📤 `{outcome}` | 🔄 `{volume}`\n"
 
         # Footer
