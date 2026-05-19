@@ -107,39 +107,37 @@ async def _fetch_native_txs(
     return total_in, total_out, tx_count, yearly_stats
 
 
-async def _fetch_jetton_history_bulk(
+async def _fetch_one_jetton_history(
     client: httpx.AsyncClient,
     address: str,
     raw_address: str,
-    cb: ProgressCb,
-) -> dict[str, dict]:
-    """BARCHA jettonlar uchun transfer tarixini BIR endpoint orqali yuklaydi.
-
-    Tonapi `/accounts/{address}/jettons/history` — bitta hamyondagi barcha
-    jetton oqimlarini birgalikda qaytaradi (per-token chaqiruvdan tezroq).
+    jetton_address: str,
+    symbol: str,
+) -> tuple[str, dict]:
+    """BIR jetton uchun transfer tarixini yuklab oladi.
 
     Returns:
-        {jetton_address: {"income_raw": int, "outcome_raw": int, "tx_count": int}}
+        (jetton_address, {"income_raw": int, "outcome_raw": int, "tx_count": int})
     """
-    stats: dict[str, dict] = {}
+    in_raw: int = 0
+    out_raw: int = 0
+    tx_n: int = 0
 
-    before_lt = None
-    page_idx = 0
-
-    for _ in range(100):  # Max 10,000 jetton operatsiyasi
+    cursor = None
+    for _ in range(50):  # Maks 5000 transfer
         params: dict = {"limit": 100}
-        if before_lt:
-            params["before_lt"] = before_lt
+        if cursor:
+            params["before_lt"] = cursor
 
         try:
             resp = await safe_request(
                 client, "GET",
-                f"{_TONAPI_URL}/accounts/{address}/jettons/history",
+                f"{_TONAPI_URL}/accounts/{address}/jettons/{jetton_address}/history",
                 headers=_HEADERS,
                 params=params,
             )
         except Exception as e:
-            logger.warning(f"Jetton bulk history error: {e}")
+            logger.warning(f"Jetton {symbol} history error: {e}")
             break
 
         data: dict = resp.json()
@@ -147,48 +145,88 @@ async def _fetch_jetton_history_bulk(
         if not events:
             break
 
-        page_idx += 1
-        # 25% -> 75% oraliq jetton uchun
-        pct = min(75, 25 + page_idx * 5)
-        await cb("progress_token_history", pct, symbol="Jettons")
-
         for event in events:
             for action in event.get("actions", []):
                 if action.get("type") != "JettonTransfer":
-                    jt_data = action.get("JettonTransfer")
-                else:
-                    jt_data = action.get("JettonTransfer", {})
-
-                if not jt_data:
                     continue
-
-                amt_raw: int = int(jt_data.get("amount", 0))
+                jt = action.get("JettonTransfer") or {}
+                amt_raw_str = jt.get("amount", "0")
+                try:
+                    amt_raw: int = int(amt_raw_str)
+                except (ValueError, TypeError):
+                    continue
                 if amt_raw == 0:
                     continue
 
-                jetton_info = jt_data.get("jetton", {}) or {}
-                jetton_addr = jetton_info.get("address", "").lower()
-                if not jetton_addr:
-                    continue
-
-                sender = (jt_data.get("sender") or {}).get("address", "").lower()
-                recipient = (jt_data.get("recipient") or {}).get("address", "").lower()
-
-                if jetton_addr not in stats:
-                    stats[jetton_addr] = {"income_raw": 0, "outcome_raw": 0, "tx_count": 0}
+                sender = (jt.get("sender") or {}).get("address", "").lower()
+                recipient = (jt.get("recipient") or {}).get("address", "").lower()
 
                 if sender == raw_address:
-                    stats[jetton_addr]["outcome_raw"] += amt_raw
-                    stats[jetton_addr]["tx_count"] += 1
+                    out_raw += amt_raw
+                    tx_n += 1
                 elif recipient == raw_address:
-                    stats[jetton_addr]["income_raw"] += amt_raw
-                    stats[jetton_addr]["tx_count"] += 1
+                    in_raw += amt_raw
+                    tx_n += 1
 
-        next_before = data.get("next_from") or events[-1].get("lt")
-        if not next_before:
+        # Pagination — eng oxirgi event'ning lt'sini ishlatamiz
+        next_from = data.get("next_from")
+        if next_from in (None, 0, "0"):
+            # Fallback: oxirgi event lt
+            last_lt = events[-1].get("lt")
+            if not last_lt or last_lt == cursor:
+                break
+            cursor = last_lt
+        else:
+            cursor = next_from
+
+        if len(events) < 100:
             break
-        before_lt = next_before
+
         await asyncio.sleep(0.1)
+
+    return jetton_address.lower(), {
+        "income_raw": in_raw,
+        "outcome_raw": out_raw,
+        "tx_count": tx_n,
+    }
+
+
+async def _fetch_all_jettons_history(
+    client: httpx.AsyncClient,
+    address: str,
+    raw_address: str,
+    jetton_balance_map: dict[str, dict],
+    cb: ProgressCb,
+) -> dict[str, dict]:
+    """BARCHA jettonlar uchun transfer tarixini PARALLEL yuklab oladi.
+
+    Returns:
+        {jetton_address: {"income_raw": int, "outcome_raw": int, "tx_count": int}}
+    """
+    if not jetton_balance_map:
+        return {}
+
+    tasks = []
+    for j_addr, info in jetton_balance_map.items():
+        tasks.append(_fetch_one_jetton_history(
+            client, address, raw_address, j_addr, info.get("symbol", "?")
+        ))
+
+    stats: dict[str, dict] = {}
+    completed = 0
+    total = len(tasks)
+
+    # asyncio.as_completed bilan progress'ni real-time yangilab boramiz
+    for coro in asyncio.as_completed(tasks):
+        try:
+            j_addr, j_stats = await coro
+            stats[j_addr] = j_stats
+        except Exception as e:
+            logger.warning(f"Jetton history fetch task error: {e}")
+        completed += 1
+        # Progress: 30% -> 90%
+        pct = 30 + int(60 * completed / total)
+        await cb("progress_token_history", pct, symbol=f"{completed}/{total}")
 
     return stats
 
@@ -254,7 +292,7 @@ async def get_ton_balance(
         except Exception as e:
             logger.warning(f"Toncenter cross-check failed: {e}")
 
-        # ═══ 3. Hozirgi jetton balanslari ═══
+        # ═══ 3. Hozirgi jetton balanslari (avvalo, parallel pipeline uchun kerak) ═══
         await cb("progress_tokens", 18)
         jetton_balance_map: dict[str, dict] = {}
         try:
@@ -277,11 +315,13 @@ async def get_ton_balance(
         except Exception as e:
             logger.warning(f"TON jettons fetch error: {e}")
 
-        # ═══ 4. PARALLEL: Native TON tranzaksiyalari + Jetton transferlari ═══
+        # ═══ 4. PARALLEL: Native TON tranzaksiyalari + Har bir jetton tarixi ═══
         await cb("progress_txns", 25, count=0)
 
         native_task = _fetch_native_txs(client, address, raw_address, cb)
-        jetton_task = _fetch_jetton_history_bulk(client, address, raw_address, cb)
+        jetton_task = _fetch_all_jettons_history(
+            client, address, raw_address, jetton_balance_map, cb
+        )
 
         try:
             (total_in, total_out, tx_count, yearly_stats), jetton_stats = await asyncio.gather(
@@ -350,7 +390,9 @@ async def get_ton_balance(
         })
 
     # ═══ 6. Umumiy yig'indi ═══
-    grand_tx_count: int = sum(a["tx_count"] for a in assets)
+    # Native tx_count — bu hamyondagi BARCHA on-chain tranzaksiyalar (TON va jettonlar)
+    # Har token uchun "tx_count" — o'sha tokenni o'z ichiga olgan transferlar soni
+    grand_tx_count: int = tx_count
     asset_count: int = len(assets)
 
     return {
