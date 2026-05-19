@@ -4,6 +4,7 @@ import httpx
 import logging
 import asyncio
 from datetime import datetime, timezone
+from typing import Awaitable, Callable
 
 from config import TON_API_KEY
 from services import safe_request, DEFAULT_TIMEOUT
@@ -15,8 +16,19 @@ _TONCENTER_URL: str = "https://toncenter.com/api/v2"
 _HEADERS: dict[str, str] = {"Authorization": f"Bearer {TON_API_KEY}"}
 _NANOTON_DIVISOR: int = 10**9
 
+# Progress callback turi: (step_key, percent, **extra) -> None
+ProgressCb = Callable[..., Awaitable[None]]
 
-async def get_ton_balance(address: str) -> dict:
+
+async def _noop_progress(*args, **kwargs) -> None:
+    """Progress callback berilmaganda ishlatiladigan bo'sh funksiya."""
+    return None
+
+
+async def get_ton_balance(
+    address: str,
+    progress: ProgressCb | None = None,
+) -> dict:
     """TON hamyon to'liq professional audit — ikki manbadan tekshirish.
 
     1. tonapi.io — asosiy ma'lumot manbasi
@@ -24,10 +36,13 @@ async def get_ton_balance(address: str) -> dict:
 
     Args:
         address: TON hamyon manzili.
+        progress: Progress callback funksiyasi (step_key, percent, **extra).
 
     Returns:
         To'liq audit natijasi.
     """
+    cb: ProgressCb = progress or _noop_progress
+
     total_in: int = 0
     total_out: int = 0
     tx_count: int = 0
@@ -39,6 +54,7 @@ async def get_ton_balance(address: str) -> dict:
 
     async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
         # ═══ 1. Hozirgi balans (tonapi.io) ═══
+        await cb("progress_balance", 5)
         raw_address: str = ""  # "0:..." formatdagi xom manzil (taqqoslash uchun)
         try:
             resp = await safe_request(
@@ -55,6 +71,7 @@ async def get_ton_balance(address: str) -> dict:
             return {"network": "TON", "address": address, "error": str(e)}
 
         # ═══ 2. Balansni toncenter bilan tasdiqlash (cross-check) ═══
+        await cb("progress_verifying", 12)
         try:
             resp2 = await client.get(
                 f"{_TONCENTER_URL}/getAddressBalance",
@@ -85,8 +102,10 @@ async def get_ton_balance(address: str) -> dict:
             balance_verified = False
 
         # ═══ 3. Tranzaksiyalar (tonapi.io) — Yillar kesimida barchasini olish ═══
+        await cb("progress_txns", 20, count=0)
         try:
             before_lt = None
+            page_idx = 0
             # Maksimal 100 sahifa (10,000 tranzaksiya) xavfsizlik uchun, aksariyat hamyonlar uchun yetarli.
             for _ in range(100):
                 params = {"limit": 100}
@@ -106,6 +125,10 @@ async def get_ton_balance(address: str) -> dict:
                     break
                     
                 tx_count += len(transactions)
+                page_idx += 1
+                # Har sahifa uchun progress yangilash (20% -> 55% oraliq)
+                pct = min(55, 20 + page_idx * 4)
+                await cb("progress_txns", pct, count=tx_count)
 
                 for tx in transactions:
                     tx_time = tx.get("utime", 0)
@@ -149,6 +172,7 @@ async def get_ton_balance(address: str) -> dict:
             logger.warning(f"TON transactions fetch error: {e}")
 
         # ═══ 4. Jetton balanslar + transfer tarixi ═══
+        await cb("progress_tokens", 60)
         try:
             resp = await safe_request(
                 client, "GET",
@@ -157,7 +181,13 @@ async def get_ton_balance(address: str) -> dict:
             )
             jetton_data: dict = resp.json()
 
-            for item in jetton_data.get("balances", []):
+            jetton_items = [
+                it for it in jetton_data.get("balances", [])
+                if (int(it.get("balance", "0")) / (10 ** int(it.get("jetton", {}).get("decimals", 9)))) >= 0.00001
+            ]
+            total_jettons = max(len(jetton_items), 1)
+
+            for idx, item in enumerate(jetton_items):
                 jetton_info: dict = item.get("jetton", {})
                 symbol: str = jetton_info.get("symbol", "UNKNOWN")
                 decimals: int = int(jetton_info.get("decimals", 9))
@@ -165,9 +195,9 @@ async def get_ton_balance(address: str) -> dict:
                 raw_balance: int = int(item.get("balance", "0"))
                 token_balance: float = raw_balance / divisor
 
-                if token_balance < 0.00001:
-                    continue
-
+                # Har token uchun progress (60% -> 95% oraliq)
+                pct = 60 + int(35 * (idx + 1) / total_jettons)
+                await cb("progress_token_history", pct, symbol=symbol)
                 # Jetton kontrakti manzili (transfer tarixi so'rash uchun)
                 jetton_address: str = jetton_info.get("address", "")
 
@@ -222,6 +252,8 @@ async def get_ton_balance(address: str) -> dict:
                 })
         except Exception as e:
             logger.warning(f"TON jettons fetch error: {e}")
+
+    await cb("progress_finalizing", 98)
 
     income_ton: float = total_in / _NANOTON_DIVISOR
     outcome_ton: float = total_out / _NANOTON_DIVISOR

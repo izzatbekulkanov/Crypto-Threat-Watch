@@ -3,6 +3,7 @@
 import httpx
 import logging
 import asyncio
+from typing import Awaitable, Callable
 
 from config import ETHERSCAN_API_KEY
 from services import safe_request, DEFAULT_TIMEOUT
@@ -12,8 +13,17 @@ logger: logging.Logger = logging.getLogger(__name__)
 _BASE_URL: str = "https://api.etherscan.io/api"
 _WEI_DIVISOR: int = 10**18
 
+ProgressCb = Callable[..., Awaitable[None]]
 
-async def get_eth_balance(address: str) -> dict:
+
+async def _noop_progress(*args, **kwargs) -> None:
+    return None
+
+
+async def get_eth_balance(
+    address: str,
+    progress: ProgressCb | None = None,
+) -> dict:
     """Ethereum hamyon to'liq professional audit.
 
     - Hozirgi ETH balansi (real-time)
@@ -28,6 +38,8 @@ async def get_eth_balance(address: str) -> dict:
     Returns:
         To'liq audit natijasi.
     """
+    cb: ProgressCb = progress or _noop_progress
+
     total_in: int = 0
     total_out: int = 0
     tx_count: int = 0
@@ -39,6 +51,7 @@ async def get_eth_balance(address: str) -> dict:
 
     async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
         # 1. Hozirgi ETH balansi
+        await cb("progress_balance", 5)
         try:
             resp = await safe_request(
                 client, "GET", _BASE_URL,
@@ -57,6 +70,7 @@ async def get_eth_balance(address: str) -> dict:
             return {"network": "ETH", "address": address, "error": str(e)}
 
         # 2. ETH tranzaksiyalari (yillar kesimida)
+        await cb("progress_txns", 15, count=0)
         try:
             address_lower: str = address.lower()
             page = 1
@@ -106,12 +120,15 @@ async def get_eth_balance(address: str) -> dict:
                 if len(transactions) < 10000:
                     break
                 page += 1
+                pct = min(50, 15 + page * 5)
+                await cb("progress_txns", pct, count=tx_count)
                 await asyncio.sleep(0.5)
 
         except Exception as e:
             logger.warning(f"ETH txlist fetch error: {e}")
 
         # 3. ERC-20 token transferlari
+        await cb("progress_tokens", 60)
         try:
             address_lower = address.lower()
             page = 1
@@ -153,9 +170,13 @@ async def get_eth_balance(address: str) -> dict:
                 if len(token_txs) < 10000:
                     break
                 page += 1
+                pct = min(95, 60 + page * 5)
+                await cb("progress_token_history", pct, symbol="ERC-20")
 
         except Exception as e:
             logger.warning(f"ETH token fetch error: {e}")
+
+    await cb("progress_finalizing", 98)
 
     income_eth: float = total_in / _WEI_DIVISOR
     outcome_eth: float = total_out / _WEI_DIVISOR

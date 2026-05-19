@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 
 from aiogram import Bot, Dispatcher, types, F
@@ -84,6 +85,82 @@ def language_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="🇬🇧 English", callback_data="lang_en"),
         ]
     ])
+
+
+# ═══════════════════════════════════════════
+# Progress bar yaratish
+# ═══════════════════════════════════════════
+def _build_progress_bar(percent: int, width: int = 12) -> str:
+    """Yashil/oq progress bar qatorini qaytaradi.
+
+    Args:
+        percent: 0-100 oraliqdagi qiymat.
+        width: Bar uzunligi (belgilarda).
+
+    Returns:
+        "▓▓▓▓░░░░░░░░ 33%" ko'rinishidagi qator.
+    """
+    percent = max(0, min(100, percent))
+    filled: int = int(width * percent / 100)
+    bar: str = "▓" * filled + "░" * (width - filled)
+    return f"`{bar}` *{percent}%*"
+
+
+def make_progress_callback(
+    status_msg: types.Message,
+    network: str,
+    short_addr: str,
+    lang: str,
+):
+    """Telegram xabarini progress bilan yangilab boradigan callback yaratadi.
+
+    Telegram rate-limit (~1 xabar/sek) ni hurmat qilib, xabar 1.5 soniyada
+    bir martadan tez-tez yangilanmaydi. Shuningdek, percent o'zgarmaganda
+    behuda yangilanish bo'lmaydi.
+    """
+    state: dict = {
+        "last_update": 0.0,
+        "last_pct": -1,
+        "last_text": "",
+        "lock": asyncio.Lock(),
+    }
+
+    async def _cb(step_key: str, percent: int, **extra) -> None:
+        # Throttle: 1.5 soniya — Telegram rate-limit oldini olish
+        now: float = time.monotonic()
+        if percent < 100 and percent != 98:
+            if now - state["last_update"] < 1.5:
+                return
+            if percent == state["last_pct"]:
+                return
+
+        async with state["lock"]:
+            try:
+                step_text: str = t(step_key, lang, **extra)
+                bar: str = _build_progress_bar(percent)
+                new_text: str = t(
+                    "analyzing", lang,
+                    network=network,
+                    short_addr=short_addr,
+                    bar=bar,
+                    step=step_text,
+                )
+
+                # Bir xil xabar bo'lsa, yangilamaymiz (Telegram xato bermasligi uchun)
+                if new_text == state["last_text"]:
+                    return
+
+                await status_msg.edit_text(
+                    new_text, parse_mode=ParseMode.MARKDOWN
+                )
+                state["last_update"] = now
+                state["last_pct"] = percent
+                state["last_text"] = new_text
+            except Exception as e:
+                # Telegram xatoliklarni jim yutamiz (rate limit, message not modified)
+                logger.debug(f"Progress update skipped: {e}")
+
+    return _cb
 
 
 # ═══════════════════════════════════════════
@@ -502,20 +579,28 @@ async def handle_link(message: types.Message, state: FSMContext) -> None:
 
     short_addr: str = f"{address[:8]}...{address[-6:]}"
 
-    # Vizual status
+    # Vizual status — boshlang'ich progress bar bilan
+    initial_bar: str = _build_progress_bar(0)
     status_msg: types.Message = await message.answer(
-        t("analyzing", lang, network=network, short_addr=short_addr),
+        t("analyzing", lang,
+          network=network,
+          short_addr=short_addr,
+          bar=initial_bar,
+          step=t("progress_init", lang)),
         parse_mode=ParseMode.MARKDOWN,
     )
+
+    # Progress callback — har bir API bosqichida xabarni yangilaydi
+    progress_cb = make_progress_callback(status_msg, network, short_addr, lang)
 
     try:
         # API chaqirish
         if network == "TON":
-            data: dict = await get_ton_balance(address)
+            data: dict = await get_ton_balance(address, progress=progress_cb)
         elif network == "ETH":
-            data = await get_eth_balance(address)
+            data = await get_eth_balance(address, progress=progress_cb)
         elif network == "TRON":
-            data = await get_tron_usdt_balance(address)
+            data = await get_tron_usdt_balance(address, progress=progress_cb)
         else:
             await status_msg.edit_text("❌ Unknown network.")
             return

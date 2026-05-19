@@ -3,6 +3,7 @@
 import httpx
 import logging
 import asyncio
+from typing import Awaitable, Callable
 
 from config import TRONGRID_API_KEY
 from services import safe_request, DEFAULT_TIMEOUT
@@ -13,8 +14,17 @@ _BASE_URL: str = "https://api.trongrid.io"
 _USDT_CONTRACT: str = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 _TRX_DIVISOR: int = 10**6
 
+ProgressCb = Callable[..., Awaitable[None]]
 
-async def get_tron_usdt_balance(address: str) -> dict:
+
+async def _noop_progress(*args, **kwargs) -> None:
+    return None
+
+
+async def get_tron_usdt_balance(
+    address: str,
+    progress: ProgressCb | None = None,
+) -> dict:
     """TRON hamyon to'liq professional audit.
 
     - Hozirgi TRX balansi (real-time)
@@ -30,6 +40,8 @@ async def get_tron_usdt_balance(address: str) -> dict:
     Returns:
         To'liq audit natijasi.
     """
+    cb: ProgressCb = progress or _noop_progress
+
     trx_in: int = 0
     trx_out: int = 0
     trx_tx_count: int = 0
@@ -43,6 +55,7 @@ async def get_tron_usdt_balance(address: str) -> dict:
 
     async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
         # 1. Hozirgi TRX balansi
+        await cb("progress_balance", 5)
         try:
             resp = await safe_request(
                 client, "GET", f"{_BASE_URL}/v1/accounts/{address}", headers=headers
@@ -56,8 +69,10 @@ async def get_tron_usdt_balance(address: str) -> dict:
             return {"network": "TRON", "address": address, "error": str(e)}
 
         # 2. TRX tranzaksiyalari (yillar kesimida)
+        await cb("progress_txns", 15, count=0)
         try:
             fingerprint = None
+            page_idx = 0
             for _ in range(50): # Max 10,000 txs
                 params = {"only_confirmed": "true", "limit": "200"}
                 if fingerprint:
@@ -105,15 +120,20 @@ async def get_tron_usdt_balance(address: str) -> dict:
                 fingerprint = trx_data.get("meta", {}).get("fingerprint")
                 if not fingerprint:
                     break
-                
+
+                page_idx += 1
+                pct = min(50, 15 + page_idx * 3)
+                await cb("progress_txns", pct, count=trx_tx_count)
                 await asyncio.sleep(0.5)
         except Exception as e:
             logger.warning(f"TRON TRX transactions error: {e}")
 
         # 3. TRC-20 token tranzaksiyalari (yillar kesimida)
+        await cb("progress_tokens", 55)
         try:
             address_lower: str = address.lower()
             fingerprint = None
+            trc_page_idx = 0
             for _ in range(50):
                 params = {"only_confirmed": "true", "limit": "200"}
                 if fingerprint:
@@ -155,9 +175,14 @@ async def get_tron_usdt_balance(address: str) -> dict:
                 fingerprint = trc20_data.get("meta", {}).get("fingerprint")
                 if not fingerprint:
                     break
+                trc_page_idx += 1
+                pct = min(95, 55 + trc_page_idx * 4)
+                await cb("progress_token_history", pct, symbol="TRC-20")
                 await asyncio.sleep(0.5)
         except Exception as e:
             logger.warning(f"TRON TRC-20 fetch error: {e}")
+
+    await cb("progress_finalizing", 98)
 
     # Hisoblash
     income_trx: float = trx_in / _TRX_DIVISOR

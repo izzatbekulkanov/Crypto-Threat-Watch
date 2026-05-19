@@ -152,20 +152,60 @@ TEXTS: dict[str, dict[str, str]] = {
             "⏳ *Tahlil jarayonida...*\n\n"
             "🌐 Tarmoq: `{network}`\n"
             "📍 Manzil: `{short_addr}`\n\n"
-            "⏱ _Blokcheyn ma'lumotlari yuklanmoqda..._"
+            "{bar}\n"
+            "_{step}_"
         ),
         "ru": (
             "⏳ *Идёт анализ...*\n\n"
             "🌐 Сеть: `{network}`\n"
             "📍 Адрес: `{short_addr}`\n\n"
-            "⏱ _Загрузка данных блокчейна..._"
+            "{bar}\n"
+            "_{step}_"
         ),
         "en": (
             "⏳ *Analyzing...*\n\n"
             "🌐 Network: `{network}`\n"
             "📍 Address: `{short_addr}`\n\n"
-            "⏱ _Loading blockchain data..._"
+            "{bar}\n"
+            "_{step}_"
         ),
+    },
+
+    # Progress bosqichlari
+    "progress_init": {
+        "uz": "🚀 Boshlanmoqda...",
+        "ru": "🚀 Запуск...",
+        "en": "🚀 Starting...",
+    },
+    "progress_balance": {
+        "uz": "💎 Hozirgi balans olinmoqda...",
+        "ru": "💎 Получение текущего баланса...",
+        "en": "💎 Fetching current balance...",
+    },
+    "progress_verifying": {
+        "uz": "🔐 Balans tasdiqlanmoqda...",
+        "ru": "🔐 Проверка баланса...",
+        "en": "🔐 Verifying balance...",
+    },
+    "progress_txns": {
+        "uz": "📋 Tranzaksiyalar yuklanmoqda... ({count})",
+        "ru": "📋 Загрузка транзакций... ({count})",
+        "en": "📋 Loading transactions... ({count})",
+    },
+    "progress_tokens": {
+        "uz": "🪙 Tokenlar ro'yxati olinmoqda...",
+        "ru": "🪙 Получение списка токенов...",
+        "en": "🪙 Fetching token list...",
+    },
+    "progress_token_history": {
+        "uz": "🔄 {symbol} tarixi yuklanmoqda...",
+        "ru": "🔄 Загрузка истории {symbol}...",
+        "en": "🔄 Loading {symbol} history...",
+    },
+    "progress_finalizing": {
+        "uz": "✨ Yakunlanmoqda...",
+        "ru": "✨ Завершение...",
+        "en": "✨ Finalizing...",
     },
 
     # Natija — asosiy
