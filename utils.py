@@ -12,6 +12,11 @@ _TON_URL_PATTERN: re.Pattern[str] = re.compile(
     re.IGNORECASE,
 )
 
+_TONSCAN_URL_PATTERN: re.Pattern[str] = re.compile(
+    r"(?:https?://)?(?:www\.)?tonscan\.org/(?:[a-z]{2}/)?address/([A-Za-z0-9_\-]{48})",
+    re.IGNORECASE,
+)
+
 _ETH_URL_PATTERN: re.Pattern[str] = re.compile(
     r"(?:https?://)?(?:www\.)?etherscan\.io/address/(0x[0-9a-fA-F]{40})",
     re.IGNORECASE,
@@ -65,6 +70,11 @@ def parse_crypto_link(text: str) -> Optional[tuple[str, str]]:
 
     # TONViewer URL
     match: Optional[re.Match[str]] = _TON_URL_PATTERN.search(text)
+    if match:
+        return ("TON", match.group(1))
+
+    # TonScan URL
+    match = _TONSCAN_URL_PATTERN.search(text)
     if match:
         return ("TON", match.group(1))
 
