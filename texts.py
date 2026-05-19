@@ -78,6 +78,7 @@ TEXTS: dict[str, dict[str, str]] = {
             "⚙️ *Buyruqlar:*\n\n"
             "/start — Botni qayta ishga tushirish\n"
             "/help — Ushbu yordam\n"
+            "/risk — Risk darajasi haqida ma'lumot\n"
             "/language — Tilni o'zgartirish\n"
             "/mystats — Shaxsiy statistika\n"
             "/history — So'rovlar tarixi\n"
@@ -105,6 +106,7 @@ TEXTS: dict[str, dict[str, str]] = {
             "⚙️ *Команды:*\n\n"
             "/start — Перезапуск бота\n"
             "/help — Эта справка\n"
+            "/risk — О системе оценки риска\n"
             "/language — Сменить язык\n"
             "/mystats — Личная статистика\n"
             "/history — История запросов\n"
@@ -131,6 +133,7 @@ TEXTS: dict[str, dict[str, str]] = {
             "⚙️ *Commands:*\n\n"
             "/start — Restart bot\n"
             "/help — This help\n"
+            "/risk — About risk assessment\n"
             "/language — Change language\n"
             "/mystats — Personal statistics\n"
             "/history — Query history\n"
@@ -263,6 +266,78 @@ TEXTS: dict[str, dict[str, str]] = {
             "│ 💰 Net:          `{net}`\n"
             "│ 🔄 Total volume: `{volume}`\n"
             "│ 📋 Transactions: `{tx_count}`\n"
+            "└─────────────────────────\n"
+        ),
+    },
+
+    # Har bir aktiv bo'yicha alohida blok
+    "asset_block": {
+        "uz": (
+            "\n🪙 *{symbol}*\n"
+            "┌─────────────────────────\n"
+            "│ 💎 Balans:      `{balance}`\n"
+            "│ 📥 Kirim:       `{income}`\n"
+            "│ 📤 Chiqim:      `{outcome}`\n"
+            "│ 💰 Sof qoldiq:  `{net}`\n"
+            "│ 🔄 Jami hajm:   `{volume}`\n"
+            "│ 📋 Tranzaksiyalar: `{tx_count} ta`\n"
+            "└─────────────────────────\n"
+        ),
+        "ru": (
+            "\n🪙 *{symbol}*\n"
+            "┌─────────────────────────\n"
+            "│ 💎 Баланс:       `{balance}`\n"
+            "│ 📥 Приход:       `{income}`\n"
+            "│ 📤 Расход:       `{outcome}`\n"
+            "│ 💰 Чистый:       `{net}`\n"
+            "│ 🔄 Общий объём:  `{volume}`\n"
+            "│ 📋 Транзакции:   `{tx_count} шт`\n"
+            "└─────────────────────────\n"
+        ),
+        "en": (
+            "\n🪙 *{symbol}*\n"
+            "┌─────────────────────────\n"
+            "│ 💎 Balance:      `{balance}`\n"
+            "│ 📥 Income:       `{income}`\n"
+            "│ 📤 Outcome:      `{outcome}`\n"
+            "│ 💰 Net:          `{net}`\n"
+            "│ 🔄 Total volume: `{volume}`\n"
+            "│ 📋 Transactions: `{tx_count}`\n"
+            "└─────────────────────────\n"
+        ),
+    },
+
+    # Aktivlar bosh sarlavhasi
+    "assets_header": {
+        "uz": "\n💼 *Aktivlar bo'yicha taqsimot:*\n━━━━━━━━━━━━━━━━━━━━━",
+        "ru": "\n💼 *Распределение по активам:*\n━━━━━━━━━━━━━━━━━━━━━",
+        "en": "\n💼 *Asset breakdown:*\n━━━━━━━━━━━━━━━━━━━━━",
+    },
+
+    # Yakuniy umumiy yig'indi
+    "grand_total": {
+        "uz": (
+            "\n━━━━━━━━━━━━━━━━━━━━━\n"
+            "🏆 *Umumiy yig'indi:*\n"
+            "┌─────────────────────────\n"
+            "│ 💼 Aktivlar:        `{asset_count} ta`\n"
+            "│ 📋 Jami tranzaksiyalar: `{tx_count} ta`\n"
+            "└─────────────────────────\n"
+        ),
+        "ru": (
+            "\n━━━━━━━━━━━━━━━━━━━━━\n"
+            "🏆 *Итого по кошельку:*\n"
+            "┌─────────────────────────\n"
+            "│ 💼 Активов:          `{asset_count} шт`\n"
+            "│ 📋 Всего транзакций: `{tx_count} шт`\n"
+            "└─────────────────────────\n"
+        ),
+        "en": (
+            "\n━━━━━━━━━━━━━━━━━━━━━\n"
+            "🏆 *Wallet totals:*\n"
+            "┌─────────────────────────\n"
+            "│ 💼 Assets:           `{asset_count}`\n"
+            "│ 📋 Total transactions: `{tx_count}`\n"
             "└─────────────────────────\n"
         ),
     },
@@ -431,6 +506,142 @@ TEXTS: dict[str, dict[str, str]] = {
         "uz": "✅ Til o'zgartirildi: *O'zbekcha* 🇺🇿",
         "ru": "✅ Язык изменён: *Русский* 🇷🇺",
         "en": "✅ Language changed: *English* 🇬🇧",
+    },
+
+    # Risk darajasi haqida ma'lumot
+    "risk_info": {
+        "uz": (
+            "🛡 *Risk darajasi qanday aniqlanadi?*\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "Bot hamyonni 4 ta asosiy mezon bo'yicha baholaydi va\n"
+            "ularning umumiy ballari asosida risk darajasini aniqlaydi.\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "📊 *1. Tranzaksiyalar hajmi (volume)*\n\n"
+            "• `> 100 000` birlik — `+4 ball`\n"
+            "• `> 10 000`  birlik — `+3 ball`\n"
+            "• `> 1 000`   birlik — `+2 ball`\n"
+            "• `> 100`     birlik — `+1 ball`\n\n"
+            "_Yuqori hajm — qonuniy bizneslar yoki yuvish belgisi._\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "📋 *2. Tranzaksiyalar soni*\n\n"
+            "• `> 500` ta — `+3 ball`\n"
+            "• `> 100` ta — `+2 ball`\n"
+            "• `> 50`  ta — `+1 ball`\n\n"
+            "_Ko'p tranzaksiyali hamyonlar — birja, mikser yoki bot._\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚖️ *3. Kirim/Chiqim nomutanosibligi*\n\n"
+            "Katta tomon ÷ kichik tomon nisbati:\n\n"
+            "• `> 10x` — `+3 ball` (juda shubhali)\n"
+            "• `> 5x`  — `+2 ball` (shubhali)\n"
+            "• `> 3x`  — `+1 ball` (e'tibor talab qiladi)\n\n"
+            "_Bir tomonlama oqim — drainer yoki yig'uvchi hamyon belgisi._\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "🪙 *4. Token xilma-xilligi*\n\n"
+            "• `> 10` xil token — `+2 ball`\n"
+            "• `> 5`  xil token — `+1 ball`\n\n"
+            "_Ko'p turdagi tokenlar — diversifikatsiyalangan trafik._\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "🎯 *Risk darajasi shkalasi:*\n\n"
+            "🟢 *LOW*      — `0–2 ball`\n"
+            "  Past xavf, oddiy faollik\n\n"
+            "🟡 *MEDIUM*   — `3–4 ball`\n"
+            "  O'rtacha xavf, qo'shimcha tekshiruv tavsiya etiladi\n\n"
+            "🟠 *HIGH*     — `5–7 ball`\n"
+            "  Yuqori xavf, ehtiyotkorlik talab qiladi\n\n"
+            "🔴 *CRITICAL* — `≥ 8 ball`\n"
+            "  Kritik xavf, jiddiy tekshiruvga muhtoj\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ _Risk darajasi — bu avtomatik baho. Yakuniy xulosa\n"
+            "kiberxavfsizlik mutaxassisi tomonidan beriladi._"
+        ),
+        "ru": (
+            "🛡 *Как определяется уровень риска?*\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "Бот оценивает кошелёк по 4 основным критериям и\n"
+            "на основе суммы баллов определяет уровень риска.\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "📊 *1. Объём транзакций (volume)*\n\n"
+            "• `> 100 000` ед. — `+4 балла`\n"
+            "• `> 10 000`  ед. — `+3 балла`\n"
+            "• `> 1 000`   ед. — `+2 балла`\n"
+            "• `> 100`     ед. — `+1 балл`\n\n"
+            "_Высокий объём — признак бизнеса или отмывания._\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "📋 *2. Количество транзакций*\n\n"
+            "• `> 500` шт — `+3 балла`\n"
+            "• `> 100` шт — `+2 балла`\n"
+            "• `> 50`  шт — `+1 балл`\n\n"
+            "_Много транзакций — биржа, миксер или бот._\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚖️ *3. Дисбаланс прихода/расхода*\n\n"
+            "Соотношение большей стороны к меньшей:\n\n"
+            "• `> 10x` — `+3 балла` (очень подозрительно)\n"
+            "• `> 5x`  — `+2 балла` (подозрительно)\n"
+            "• `> 3x`  — `+1 балл` (требует внимания)\n\n"
+            "_Односторонний поток — признак drainer'а или сборщика._\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "🪙 *4. Разнообразие токенов*\n\n"
+            "• `> 10` видов — `+2 балла`\n"
+            "• `> 5`  видов — `+1 балл`\n\n"
+            "_Множество токенов — диверсифицированный трафик._\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "🎯 *Шкала уровня риска:*\n\n"
+            "🟢 *LOW*      — `0–2 балла`\n"
+            "  Низкий риск, обычная активность\n\n"
+            "🟡 *MEDIUM*   — `3–4 балла`\n"
+            "  Средний риск, рекомендуется доп. проверка\n\n"
+            "🟠 *HIGH*     — `5–7 баллов`\n"
+            "  Высокий риск, требуется осторожность\n\n"
+            "🔴 *CRITICAL* — `≥ 8 баллов`\n"
+            "  Критический риск, нужна серьёзная проверка\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ _Уровень риска — это автоматическая оценка.\n"
+            "Окончательное заключение даёт специалист по кибербезопасности._"
+        ),
+        "en": (
+            "🛡 *How is risk level determined?*\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "The bot evaluates the wallet by 4 main criteria and\n"
+            "determines the risk level based on the total score.\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "📊 *1. Transaction volume*\n\n"
+            "• `> 100,000` units — `+4 points`\n"
+            "• `> 10,000`  units — `+3 points`\n"
+            "• `> 1,000`   units — `+2 points`\n"
+            "• `> 100`     units — `+1 point`\n\n"
+            "_High volume — sign of business activity or laundering._\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "📋 *2. Transaction count*\n\n"
+            "• `> 500` txs — `+3 points`\n"
+            "• `> 100` txs — `+2 points`\n"
+            "• `> 50`  txs — `+1 point`\n\n"
+            "_Many transactions — exchange, mixer, or bot._\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚖️ *3. Income/outcome imbalance*\n\n"
+            "Ratio of larger side to smaller:\n\n"
+            "• `> 10x` — `+3 points` (very suspicious)\n"
+            "• `> 5x`  — `+2 points` (suspicious)\n"
+            "• `> 3x`  — `+1 point` (needs attention)\n\n"
+            "_One-way flow — sign of a drainer or collector wallet._\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "🪙 *4. Token diversity*\n\n"
+            "• `> 10` token types — `+2 points`\n"
+            "• `> 5`  token types — `+1 point`\n\n"
+            "_Many token types — diversified traffic._\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "🎯 *Risk level scale:*\n\n"
+            "🟢 *LOW*      — `0–2 points`\n"
+            "  Low risk, normal activity\n\n"
+            "🟡 *MEDIUM*   — `3–4 points`\n"
+            "  Medium risk, additional review recommended\n\n"
+            "🟠 *HIGH*     — `5–7 points`\n"
+            "  High risk, caution required\n\n"
+            "🔴 *CRITICAL* — `≥ 8 points`\n"
+            "  Critical risk, serious investigation needed\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ _Risk level is an automatic assessment.\n"
+            "The final conclusion is given by a cybersecurity specialist._"
+        ),
     },
 
     # Tarix

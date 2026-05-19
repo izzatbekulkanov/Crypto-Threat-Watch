@@ -251,6 +251,17 @@ async def cmd_help(message: types.Message) -> None:
 
 
 # ═══════════════════════════════════════════
+# /risk — Risk darajasi haqida ma'lumot
+# ═══════════════════════════════════════════
+@dp.message(Command("risk"))
+async def cmd_risk(message: types.Message) -> None:
+    """Risk darajasi qanday hisoblanishi haqida batafsil ma'lumot."""
+    user = get_user(message.from_user.id)
+    lang: str = user["language"] if user else "uz"
+    await message.answer(t("risk_info", lang), parse_mode=ParseMode.MARKDOWN)
+
+
+# ═══════════════════════════════════════════
 # /language
 # ═══════════════════════════════════════════
 @dp.message(Command("language"))
@@ -629,36 +640,58 @@ async def handle_link(message: types.Message, state: FSMContext) -> None:
         # Hozirgi balans
         report += t("result_balance", lang, current_balance=data.get("current_balance", "—"))
 
-        # Tranzaksiya xulosasi
-        report += t(
-            "result_summary", lang,
-            income=data["total_income"],
-            outcome=data["total_outcome"],
-            net=data["net_balance"],
-            volume=data.get("total_volume", "—"),
-            tx_count=data.get("tx_count", 0),
-        )
-
-        # Risk darajasi
+        # Risk darajasi (yuqorida — eng muhim ma'lumot)
         report += t("result_risk", lang, risk_emoji=risk_emoji, risk_level=risk_level)
 
-        # Tokenlar guruhi
-        tokens: list[dict] = data.get("tokens", [])
-        if tokens:
-            report += t("result_tokens_header", lang)
-            for tk in tokens:
-                symbol: str = tk.get("symbol", "?")
-                current: str = tk.get("balance", "") or tk.get("current_balance", "")
-                income: str = tk.get("income", "")
-                outcome: str = tk.get("outcome", "")
-                volume: str = tk.get("volume", "")
+        # Har bir aktiv bo'yicha alohida blok (TON, USDT, TUSD, ...)
+        assets: list[dict] = data.get("assets", [])
+        if assets:
+            report += t("assets_header", lang)
+            for asset in assets:
+                report += t(
+                    "asset_block", lang,
+                    symbol=asset.get("symbol", "?"),
+                    balance=asset.get("balance", "—"),
+                    income=asset.get("income", "—"),
+                    outcome=asset.get("outcome", "—"),
+                    net=asset.get("net", "—"),
+                    volume=asset.get("volume", "—"),
+                    tx_count=asset.get("tx_count", 0),
+                )
 
-                report += f"• *{symbol}*"
-                if current and current not in ("—", "0.0000"):
-                    report += f": 💎 `{current}`"
-                report += "\n"
-                if income or outcome:
-                    report += f"  📥 `{income}` | 📤 `{outcome}` | 🔄 `{volume}`\n"
+            # Yakuniy umumiy yig'indi
+            report += t(
+                "grand_total", lang,
+                asset_count=data.get("asset_count", len(assets)),
+                tx_count=data.get("grand_tx_count", data.get("tx_count", 0)),
+            )
+        else:
+            # Eski format (ETH/TRON hali yangi formatga o'tmagan bo'lsa)
+            report += t(
+                "result_summary", lang,
+                income=data["total_income"],
+                outcome=data["total_outcome"],
+                net=data["net_balance"],
+                volume=data.get("total_volume", "—"),
+                tx_count=data.get("tx_count", 0),
+            )
+
+            tokens: list[dict] = data.get("tokens", [])
+            if tokens:
+                report += t("result_tokens_header", lang)
+                for tk in tokens:
+                    symbol: str = tk.get("symbol", "?")
+                    current: str = tk.get("balance", "") or tk.get("current_balance", "")
+                    income: str = tk.get("income", "")
+                    outcome: str = tk.get("outcome", "")
+                    volume: str = tk.get("volume", "")
+
+                    report += f"• *{symbol}*"
+                    if current and current not in ("—", "0.0000"):
+                        report += f": 💎 `{current}`"
+                    report += "\n"
+                    if income or outcome:
+                        report += f"  📥 `{income}` | 📤 `{outcome}` | 🔄 `{volume}`\n"
 
         # Footer
         now: str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -764,6 +797,7 @@ async def set_bot_commands() -> None:
     commands: list[BotCommand] = [
         BotCommand(command="start", description="Botni ishga tushirish"),
         BotCommand(command="help", description="Yordam"),
+        BotCommand(command="risk", description="Risk darajasi haqida"),
         BotCommand(command="language", description="Tilni o'zgartirish"),
         BotCommand(command="mystats", description="Shaxsiy statistika"),
         BotCommand(command="history", description="So'rovlar tarixi"),

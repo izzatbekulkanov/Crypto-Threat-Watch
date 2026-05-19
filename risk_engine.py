@@ -15,17 +15,22 @@ def assess_risk(data: dict) -> tuple[str, str]:
     Returns:
         (risk_level, risk_emoji) tuple.
     """
-    tx_count: int = data.get("tx_count", 0)
+    tx_count: int = data.get("grand_tx_count", data.get("tx_count", 0))
     tokens: list = data.get("tokens", [])
+    assets: list = data.get("assets", [])
 
-    # Volume ni raqamga aylantirish
-    volume_str: str = data.get("total_volume", "0")
-    volume_num: float = _parse_number(volume_str)
-
-    income_str: str = data.get("total_income", "0")
-    outcome_str: str = data.get("total_outcome", "0")
-    income_num: float = _parse_number(income_str)
-    outcome_num: float = _parse_number(outcome_str)
+    # Volume ni raqamga aylantirish — TON tarmog'i uchun barcha aktivlar yig'indisi
+    if assets:
+        volume_num: float = sum(_parse_number(a.get("volume", "0")) for a in assets)
+        income_num: float = sum(_parse_number(a.get("income", "0")) for a in assets)
+        outcome_num: float = sum(_parse_number(a.get("outcome", "0")) for a in assets)
+    else:
+        volume_str: str = data.get("total_volume", "0")
+        volume_num = _parse_number(volume_str)
+        income_str: str = data.get("total_income", "0")
+        outcome_str: str = data.get("total_outcome", "0")
+        income_num = _parse_number(income_str)
+        outcome_num = _parse_number(outcome_str)
 
     # Risk hisoblash
     risk_score: int = 0
