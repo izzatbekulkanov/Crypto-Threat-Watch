@@ -3,6 +3,8 @@
 import asyncio
 import httpx
 import logging
+from datetime import datetime, timezone
+from typing import Awaitable, Callable
 
 from config import TRONGRID_API_KEY
 from services import safe_request, DEFAULT_TIMEOUT
@@ -13,8 +15,17 @@ _BASE_URL: str = "https://api.trongrid.io"
 _USDT_CONTRACT: str = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 _TRX_DIVISOR: int = 10**6
 
+ProgressCb = Callable[..., Awaitable[None]]
 
-async def get_tron_usdt_balance(address: str) -> dict:
+
+async def _noop_progress(*args, **kwargs) -> None:
+    return None
+
+
+async def get_tron_usdt_balance(
+    address: str,
+    progress: ProgressCb | None = None,
+) -> dict:
     """TRON hamyon to'liq professional audit.
 
     - Hozirgi TRX balansi (real-time)
@@ -26,14 +37,18 @@ async def get_tron_usdt_balance(address: str) -> dict:
 
     Args:
         address: TRON hamyon manzili (T...).
+        progress: Progress callback funksiyasi.
 
     Returns:
         To'liq audit natijasi.
     """
+    cb: ProgressCb = progress or _noop_progress
+
     trx_in: int = 0
     trx_out: int = 0
     trx_tx_count: int = 0
     current_trx: float = 0.0
+    yearly_stats: dict[str, dict[str, float]] = {}
 
     # TRC-20 tokenlar
     token_data_map: dict[str, dict[str, float]] = {}
@@ -43,12 +58,14 @@ async def get_tron_usdt_balance(address: str) -> dict:
     async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
         # Helper tasks
         async def fetch_account() -> dict:
+            await cb("progress_balance", 10)
             resp = await safe_request(
                 client, "GET", f"{_BASE_URL}/v1/accounts/{address}", headers=headers
             )
             return resp.json()
 
         async def fetch_transactions() -> dict:
+            await cb("progress_txns", 30, count=0)
             try:
                 resp = await safe_request(
                     client, "GET",
@@ -56,12 +73,16 @@ async def get_tron_usdt_balance(address: str) -> dict:
                     headers=headers,
                     params={"only_confirmed": "true", "limit": "200"},
                 )
-                return resp.json()
+                data = resp.json()
+                txs = data.get("data", [])
+                await cb("progress_txns", 60, count=len(txs))
+                return data
             except Exception as e:
                 logger.warning(f"TRON TRX transactions error: {e}")
                 return {}
 
         async def fetch_trc20() -> dict:
+            await cb("progress_tokens", 70)
             try:
                 resp = await safe_request(
                     client, "GET",
@@ -69,7 +90,9 @@ async def get_tron_usdt_balance(address: str) -> dict:
                     headers=headers,
                     params={"only_confirmed": "true", "limit": "200"},
                 )
-                return resp.json()
+                data = resp.json()
+                await cb("progress_token_history", 90, symbol="TRC-20")
+                return data
             except Exception as e:
                 logger.warning(f"TRON TRC-20 fetch error: {e}")
                 return {}
@@ -99,12 +122,19 @@ async def get_tron_usdt_balance(address: str) -> dict:
             logger.error(f"Error parsing TRON account: {e}")
             return {"network": "TRON", "address": address, "error": str(e)}
 
-        # 2. TRX tranzaksiyalari
+        # 2. TRX tranzaksiyalari & Yearly Stats
         if trx_data and not isinstance(trx_data, Exception):
             trx_txs: list[dict] = trx_data.get("data", [])
             trx_tx_count = len(trx_txs)
 
             for tx in trx_txs:
+                tx_time = tx.get("block_timestamp", 0)
+                year = "Unknown"
+                if tx_time:
+                    year = str(datetime.fromtimestamp(tx_time / 1000, tz=timezone.utc).year)
+                if year not in yearly_stats:
+                    yearly_stats[year] = {"in": 0.0, "out": 0.0}
+
                 raw_data: dict = tx.get("raw_data", {})
                 contracts: list = raw_data.get("contract", [])
                 for contract in contracts:
@@ -116,8 +146,10 @@ async def get_tron_usdt_balance(address: str) -> dict:
 
                         if _is_same_address(to_addr, address):
                             trx_in += amount
+                            yearly_stats[year]["in"] += amount / _TRX_DIVISOR
                         if _is_same_address(owner_addr, address):
                             trx_out += amount
+                            yearly_stats[year]["out"] += amount / _TRX_DIVISOR
 
         # 3. TRC-20 token tranzaksiyalari
         if trc20_data and not isinstance(trc20_data, Exception):
@@ -144,6 +176,8 @@ async def get_tron_usdt_balance(address: str) -> dict:
                     token_data_map[symbol]["income"] += token_value
                 if from_addr_str == address_lower:
                     token_data_map[symbol]["outcome"] += token_value
+
+    await cb("progress_finalizing", 98)
 
     # Hisoblash
     income_trx: float = trx_in / _TRX_DIVISOR
@@ -200,6 +234,8 @@ async def get_tron_usdt_balance(address: str) -> dict:
         main_net = f"{income_trx - outcome_trx:,.4f} TRX"
         main_volume = f"{volume_trx:,.4f} TRX"
 
+    total_tx: int = trx_tx_count + len(token_data_map.get("USDT", {}).keys())
+
     return {
         "network": "TRON",
         "address": address,
@@ -208,8 +244,9 @@ async def get_tron_usdt_balance(address: str) -> dict:
         "total_outcome": main_outcome,
         "net_balance": main_net,
         "total_volume": main_volume,
-        "tx_count": trx_tx_count,
+        "tx_count": total_tx,
         "tokens": tokens,
+        "yearly_stats": yearly_stats,
     }
 
 
@@ -218,4 +255,3 @@ def _is_same_address(hex_or_base58: str, target_base58: str) -> bool:
     if not hex_or_base58 or not target_base58:
         return False
     return hex_or_base58 == target_base58 or hex_or_base58.lower() == target_base58.lower()
-

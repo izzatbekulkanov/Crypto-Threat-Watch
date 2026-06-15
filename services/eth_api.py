@@ -3,6 +3,8 @@
 import asyncio
 import httpx
 import logging
+from datetime import datetime, timezone
+from typing import Awaitable, Callable
 
 from config import ETHERSCAN_API_KEY
 from services import safe_request, DEFAULT_TIMEOUT
@@ -12,8 +14,17 @@ logger: logging.Logger = logging.getLogger(__name__)
 _BASE_URL: str = "https://api.etherscan.io/api"
 _WEI_DIVISOR: int = 10**18
 
+ProgressCb = Callable[..., Awaitable[None]]
 
-async def get_eth_balance(address: str) -> dict:
+
+async def _noop_progress(*args, **kwargs) -> None:
+    return None
+
+
+async def get_eth_balance(
+    address: str,
+    progress: ProgressCb | None = None,
+) -> dict:
     """Ethereum hamyon to'liq professional audit.
 
     - Hozirgi ETH balansi (real-time)
@@ -24,14 +35,18 @@ async def get_eth_balance(address: str) -> dict:
 
     Args:
         address: Ethereum hamyon manzili (0x...).
+        progress: Progress callback funksiyasi.
 
     Returns:
         To'liq audit natijasi.
     """
+    cb: ProgressCb = progress or _noop_progress
+
     total_in: int = 0
     total_out: int = 0
     tx_count: int = 0
     current_balance: float = 0.0
+    yearly_stats: dict[str, dict[str, float]] = {}
 
     # ERC-20 tokenlar
     token_data_map: dict[str, dict[str, float]] = {}
@@ -39,6 +54,7 @@ async def get_eth_balance(address: str) -> dict:
     async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
         # Helper tasks
         async def fetch_balance() -> dict:
+            await cb("progress_balance", 10)
             resp = await safe_request(
                 client, "GET", _BASE_URL,
                 params={
@@ -52,6 +68,7 @@ async def get_eth_balance(address: str) -> dict:
             return resp.json()
 
         async def fetch_txlist() -> dict:
+            await cb("progress_txns", 30, count=0)
             try:
                 resp = await safe_request(
                     client, "GET", _BASE_URL,
@@ -62,17 +79,22 @@ async def get_eth_balance(address: str) -> dict:
                         "startblock": "0",
                         "endblock": "99999999",
                         "sort": "desc",
-                        "offset": "300",
+                        "offset": "10000",
                         "page": "1",
                         "apikey": ETHERSCAN_API_KEY,
                     },
                 )
-                return resp.json()
+                data = resp.json()
+                txs = data.get("result", [])
+                count = len(txs) if isinstance(txs, list) else 0
+                await cb("progress_txns", 60, count=count)
+                return data
             except Exception as e:
                 logger.warning(f"ETH txlist fetch error: {e}")
                 return {}
 
         async def fetch_tokentx() -> dict:
+            await cb("progress_tokens", 70)
             try:
                 resp = await safe_request(
                     client, "GET", _BASE_URL,
@@ -83,12 +105,14 @@ async def get_eth_balance(address: str) -> dict:
                         "startblock": "0",
                         "endblock": "99999999",
                         "sort": "desc",
-                        "offset": "300",
+                        "offset": "10000",
                         "page": "1",
                         "apikey": ETHERSCAN_API_KEY,
                     },
                 )
-                return resp.json()
+                data = resp.json()
+                await cb("progress_token_history", 90, symbol="ERC-20")
+                return data
             except Exception as e:
                 logger.warning(f"ETH token fetch error: {e}")
                 return {}
@@ -116,7 +140,7 @@ async def get_eth_balance(address: str) -> dict:
             logger.error(f"Error parsing ETH balance: {e}")
             return {"network": "ETH", "address": address, "error": str(e)}
 
-        # 2. ETH tranzaksiyalari
+        # 2. ETH tranzaksiyalari & Yearly Stats
         if txlist_data and not isinstance(txlist_data, Exception):
             transactions = txlist_data.get("result", [])
             if isinstance(transactions, list):
@@ -126,10 +150,20 @@ async def get_eth_balance(address: str) -> dict:
                     value = int(tx.get("value", "0"))
                     if value == 0:
                         continue
+
+                    tx_time = int(tx.get("timeStamp", "0"))
+                    year = "Unknown"
+                    if tx_time:
+                        year = str(datetime.fromtimestamp(tx_time, tz=timezone.utc).year)
+                    if year not in yearly_stats:
+                        yearly_stats[year] = {"in": 0.0, "out": 0.0}
+
                     if tx.get("to", "").lower() == address_lower:
                         total_in += value
+                        yearly_stats[year]["in"] += value / _WEI_DIVISOR
                     if tx.get("from", "").lower() == address_lower:
                         total_out += value
+                        yearly_stats[year]["out"] += value / _WEI_DIVISOR
             else:
                 logger.warning(f"ETH txlist API returned non-list: {transactions}")
 
@@ -151,6 +185,8 @@ async def get_eth_balance(address: str) -> dict:
                         token_data_map[symbol]["income"] += value_token
                     if ttx.get("from", "").lower() == address_lower:
                         token_data_map[symbol]["outcome"] += value_token
+
+    await cb("progress_finalizing", 98)
 
     income_eth: float = total_in / _WEI_DIVISOR
     outcome_eth: float = total_out / _WEI_DIVISOR
@@ -186,5 +222,5 @@ async def get_eth_balance(address: str) -> dict:
         "total_volume": f"{total_volume:,.6f} ETH",
         "tx_count": tx_count,
         "tokens": tokens,
+        "yearly_stats": yearly_stats,
     }
-
