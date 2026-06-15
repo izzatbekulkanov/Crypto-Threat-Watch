@@ -8,12 +8,7 @@ from typing import Optional
 # URL Regex shablonlari
 # ═══════════════════════════════════════════
 _TON_URL_PATTERN: re.Pattern[str] = re.compile(
-    r"(?:https?://)?(?:www\.)?tonviewer\.com/([A-Za-z0-9_\-]{48})",
-    re.IGNORECASE,
-)
-
-_TONSCAN_URL_PATTERN: re.Pattern[str] = re.compile(
-    r"(?:https?://)?(?:www\.)?tonscan\.org/(?:[a-z]{2}/)?address/([A-Za-z0-9_\-]{48})",
+    r"(?:https?://)?(?:www\.)?(?:tonviewer\.com|tonscan\.org/(?:[a-z]{2}/)?address)/([A-Za-z0-9_\-]{48})",
     re.IGNORECASE,
 )
 
@@ -70,11 +65,6 @@ def parse_crypto_link(text: str) -> Optional[tuple[str, str]]:
 
     # TONViewer URL
     match: Optional[re.Match[str]] = _TON_URL_PATTERN.search(text)
-    if match:
-        return ("TON", match.group(1))
-
-    # TonScan URL
-    match = _TONSCAN_URL_PATTERN.search(text)
     if match:
         return ("TON", match.group(1))
 

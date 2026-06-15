@@ -27,4 +27,4 @@ AI Agent ushbu loyihani bosqichma-bosqich qurishi va har bir bosqich tugagach, u
 
 ## 🟩 Phase 5: Yakuniy Tekshiruv va Test
 - [x] Botni mahalliy muhitda test qilish.
-- [ ] API limitlari va asinxron so'rovlar tezligini optimallashtirish.
+- [x] API limitlari va asinxron so'rovlar tezligini optimallashtirish.
