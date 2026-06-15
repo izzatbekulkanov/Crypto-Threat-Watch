@@ -67,55 +67,113 @@ async def get_eth_balance(
             )
             return resp.json()
 
-        async def fetch_txlist() -> dict:
+        async def fetch_txlist() -> tuple[int, int, int, dict]:
+            nonlocal total_in, total_out, tx_count
             await cb("progress_txns", 30, count=0)
             try:
-                resp = await safe_request(
-                    client, "GET", _BASE_URL,
-                    params={
-                        "module": "account",
-                        "action": "txlist",
-                        "address": address,
-                        "startblock": "0",
-                        "endblock": "99999999",
-                        "sort": "desc",
-                        "offset": "10000",
-                        "page": "1",
-                        "apikey": ETHERSCAN_API_KEY,
-                    },
-                )
-                data = resp.json()
-                txs = data.get("result", [])
-                count = len(txs) if isinstance(txs, list) else 0
-                await cb("progress_txns", 60, count=count)
-                return data
+                address_lower = address.lower()
+                page = 1
+                for _ in range(10): # Max 10 sahifa (100,000 tranzaksiya)
+                    resp = await safe_request(
+                        client, "GET", _BASE_URL,
+                        params={
+                            "module": "account",
+                            "action": "txlist",
+                            "address": address,
+                            "startblock": "0",
+                            "endblock": "99999999",
+                            "sort": "desc",
+                            "offset": "10000",
+                            "page": str(page),
+                            "apikey": ETHERSCAN_API_KEY,
+                        },
+                    )
+                    data = resp.json()
+                    transactions = data.get("result", [])
+
+                    if not isinstance(transactions, list) or not transactions:
+                        break
+
+                    tx_count += len(transactions)
+
+                    for tx in transactions:
+                        value = int(tx.get("value", "0"))
+                        if value == 0:
+                            continue
+
+                        tx_time = int(tx.get("timeStamp", "0"))
+                        year = "Unknown"
+                        if tx_time:
+                            year = str(datetime.fromtimestamp(tx_time, tz=timezone.utc).year)
+                        if year not in yearly_stats:
+                            yearly_stats[year] = {"in": 0.0, "out": 0.0}
+
+                        if tx.get("to", "").lower() == address_lower:
+                            total_in += value
+                            yearly_stats[year]["in"] += value / _WEI_DIVISOR
+                        if tx.get("from", "").lower() == address_lower:
+                            total_out += value
+                            yearly_stats[year]["out"] += value / _WEI_DIVISOR
+                    
+                    if len(transactions) < 10000:
+                        break
+                    page += 1
+                    pct = min(60, 30 + page * 5)
+                    await cb("progress_txns", pct, count=tx_count)
+                    await asyncio.sleep(0.5)
             except Exception as e:
                 logger.warning(f"ETH txlist fetch error: {e}")
-                return {}
+            return total_in, total_out, tx_count, yearly_stats
 
         async def fetch_tokentx() -> dict:
             await cb("progress_tokens", 70)
             try:
-                resp = await safe_request(
-                    client, "GET", _BASE_URL,
-                    params={
-                        "module": "account",
-                        "action": "tokentx",
-                        "address": address,
-                        "startblock": "0",
-                        "endblock": "99999999",
-                        "sort": "desc",
-                        "offset": "10000",
-                        "page": "1",
-                        "apikey": ETHERSCAN_API_KEY,
-                    },
-                )
-                data = resp.json()
-                await cb("progress_token_history", 90, symbol="ERC-20")
-                return data
+                address_lower = address.lower()
+                page = 1
+                for _ in range(10): # Max 10 sahifa
+                    resp = await safe_request(
+                        client, "GET", _BASE_URL,
+                        params={
+                            "module": "account",
+                            "action": "tokentx",
+                            "address": address,
+                            "startblock": "0",
+                            "endblock": "99999999",
+                            "sort": "desc",
+                            "offset": "10000",
+                            "page": str(page),
+                            "apikey": ETHERSCAN_API_KEY,
+                        },
+                    )
+                    token_resp_data = resp.json()
+                    token_txs = token_resp_data.get("result", [])
+
+                    if not isinstance(token_txs, list) or not token_txs:
+                        break
+
+                    for ttx in token_txs:
+                        symbol = ttx.get("tokenSymbol", "UNKNOWN")
+                        decimals = int(ttx.get("tokenDecimal", "18"))
+                        value_raw = int(ttx.get("value", "0"))
+                        value_token = value_raw / (10 ** decimals)
+
+                        if symbol not in token_data_map:
+                            token_data_map[symbol] = {"income": 0.0, "outcome": 0.0}
+
+                        if ttx.get("to", "").lower() == address_lower:
+                            token_data_map[symbol]["income"] += value_token
+                        if ttx.get("from", "").lower() == address_lower:
+                            token_data_map[symbol]["outcome"] += value_token
+                            
+                    if len(token_txs) < 10000:
+                        break
+                    page += 1
+                    pct = min(95, 70 + page * 5)
+                    await cb("progress_token_history", pct, symbol="ERC-20")
+                    await asyncio.sleep(0.5)
             except Exception as e:
                 logger.warning(f"ETH token fetch error: {e}")
-                return {}
+            return token_data_map
 
         # ═══ Parallel Fetching ═══
         results = await asyncio.gather(
@@ -139,52 +197,6 @@ async def get_eth_balance(
         except Exception as e:
             logger.error(f"Error parsing ETH balance: {e}")
             return {"network": "ETH", "address": address, "error": str(e)}
-
-        # 2. ETH tranzaksiyalari & Yearly Stats
-        if txlist_data and not isinstance(txlist_data, Exception):
-            transactions = txlist_data.get("result", [])
-            if isinstance(transactions, list):
-                tx_count = len(transactions)
-                address_lower = address.lower()
-                for tx in transactions:
-                    value = int(tx.get("value", "0"))
-                    if value == 0:
-                        continue
-
-                    tx_time = int(tx.get("timeStamp", "0"))
-                    year = "Unknown"
-                    if tx_time:
-                        year = str(datetime.fromtimestamp(tx_time, tz=timezone.utc).year)
-                    if year not in yearly_stats:
-                        yearly_stats[year] = {"in": 0.0, "out": 0.0}
-
-                    if tx.get("to", "").lower() == address_lower:
-                        total_in += value
-                        yearly_stats[year]["in"] += value / _WEI_DIVISOR
-                    if tx.get("from", "").lower() == address_lower:
-                        total_out += value
-                        yearly_stats[year]["out"] += value / _WEI_DIVISOR
-            else:
-                logger.warning(f"ETH txlist API returned non-list: {transactions}")
-
-        # 3. ERC-20 token transferlari
-        if tokentx_data and not isinstance(tokentx_data, Exception):
-            token_txs = tokentx_data.get("result", [])
-            if isinstance(token_txs, list):
-                address_lower = address.lower()
-                for ttx in token_txs:
-                    symbol = ttx.get("tokenSymbol", "UNKNOWN")
-                    decimals = int(ttx.get("tokenDecimal", "18"))
-                    value_raw = int(ttx.get("value", "0"))
-                    value_token = value_raw / (10 ** decimals)
-
-                    if symbol not in token_data_map:
-                        token_data_map[symbol] = {"income": 0.0, "outcome": 0.0}
-
-                    if ttx.get("to", "").lower() == address_lower:
-                        token_data_map[symbol]["income"] += value_token
-                    if ttx.get("from", "").lower() == address_lower:
-                        token_data_map[symbol]["outcome"] += value_token
 
     await cb("progress_finalizing", 98)
 

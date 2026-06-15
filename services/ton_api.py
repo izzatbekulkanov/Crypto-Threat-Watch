@@ -29,8 +29,10 @@ async def get_ton_balance(
 ) -> dict:
     """TON hamyon to'liq professional audit — ikki manbadan tekshirish.
 
-    1. tonapi.io — asosiy ma'lumot manbasi
-    2. toncenter.com — balansni tasdiqlash (cross-check)
+    1. tonapi.io — balans va raw address ni olish uchun
+    2. toncenter.com — balansni tasdiqlash
+    3. tonapi.io (transactions) — paginated loop orqali tranzaksiyalarni olish
+    4. tonapi.io (jettons) — jettonlarni olish
 
     Args:
         address: TON hamyon manzili.
@@ -52,16 +54,24 @@ async def get_ton_balance(
     yearly_stats: dict[str, dict[str, float]] = {}
 
     async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
-        # Helper tasks to run concurrently
-        async def fetch_account() -> dict:
-            await cb("progress_balance", 10)
+        # ═══ 1. Hozirgi balans + raw address ═══
+        await cb("progress_balance", 10)
+        try:
             resp = await safe_request(
                 client, "GET", f"{_TONAPI_URL}/accounts/{address}", headers=_HEADERS
             )
-            data = resp.json()
-            await cb("progress_verifying", 20)
-            return data
+            account_data: dict = resp.json()
+            balance_nano: int = int(account_data.get("balance", 0))
+            current_balance = balance_nano / _NANOTON_DIVISOR
+            account_status = account_data.get("status", "unknown")
+            raw_address = account_data.get("address", "").lower()
+        except Exception as e:
+            logger.error(f"TON account fetch error: {e}")
+            return {"network": "TON", "address": address, "error": str(e)}
 
+        await cb("progress_verifying", 20)
+
+        # Helper tasks to run concurrently
         async def fetch_toncenter_balance() -> float | None:
             try:
                 resp2 = await client.get(
@@ -77,22 +87,73 @@ async def get_ton_balance(
                 logger.warning(f"Toncenter cross-check failed: {e}")
             return None
 
-        async def fetch_transactions() -> dict:
+        async def fetch_transactions_loop() -> tuple[int, int, int, dict]:
+            nonlocal total_in, total_out, tx_count
+            before_lt = None
+            page_idx = 0
+            
             await cb("progress_txns", 30, count=0)
-            try:
-                resp = await safe_request(
-                    client, "GET",
-                    f"{_TONAPI_URL}/blockchain/accounts/{address}/transactions",
-                    headers=_HEADERS,
-                    params={"limit": 100},
-                )
-                data = resp.json()
-                txs = data.get("transactions", [])
-                await cb("progress_txns", 60, count=len(txs))
-                return data
-            except Exception as e:
-                logger.warning(f"TON transactions fetch error: {e}")
-                return {}
+            
+            for _ in range(100):  # Max 10,000 tranzaksiya
+                params = {"limit": 100}
+                if before_lt:
+                    params["before_lt"] = before_lt
+
+                try:
+                    resp = await safe_request(
+                        client, "GET",
+                        f"{_TONAPI_URL}/blockchain/accounts/{address}/transactions",
+                        headers=_HEADERS,
+                        params=params,
+                    )
+                    data: dict = resp.json()
+                    transactions: list[dict] = data.get("transactions", [])
+                except Exception as e:
+                    logger.warning(f"TON transactions fetch error: {e}")
+                    break
+
+                if not transactions:
+                    break
+
+                tx_count += len(transactions)
+                page_idx += 1
+                pct = min(60, 30 + page_idx * 4)
+                await cb("progress_txns", pct, count=tx_count)
+
+                for tx in transactions:
+                    tx_time = tx.get("utime", 0)
+                    year = "Unknown"
+                    if tx_time:
+                        year = str(datetime.fromtimestamp(tx_time, tz=timezone.utc).year)
+                    if year not in yearly_stats:
+                        yearly_stats[year] = {"in": 0.0, "out": 0.0}
+
+                    in_msg: dict | None = tx.get("in_msg")
+                    if in_msg and in_msg.get("value"):
+                        src = in_msg.get("source") or {}
+                        src_addr = src.get("address", "").lower() if isinstance(src, dict) else ""
+                        if src_addr != raw_address:
+                            val = int(in_msg["value"])
+                            total_in += val
+                            yearly_stats[year]["in"] += val / _NANOTON_DIVISOR
+
+                    out_msgs: list[dict] = tx.get("out_msgs", [])
+                    for msg in out_msgs:
+                        if msg.get("value"):
+                            dest = msg.get("destination") or {}
+                            dest_addr = dest.get("address", "").lower() if isinstance(dest, dict) else ""
+                            if dest_addr != raw_address:
+                                val = int(msg["value"])
+                                total_out += val
+                                yearly_stats[year]["out"] += val / _NANOTON_DIVISOR
+
+                last_lt = transactions[-1].get("lt")
+                if not last_lt:
+                    break
+                before_lt = last_lt
+                await asyncio.sleep(0.1)
+
+            return total_in, total_out, tx_count, yearly_stats
 
         async def fetch_jettons() -> dict:
             await cb("progress_tokens", 70)
@@ -111,31 +172,15 @@ async def get_ton_balance(
 
         # ═══ Parallel Fetching ═══
         results = await asyncio.gather(
-            fetch_account(),
             fetch_toncenter_balance(),
-            fetch_transactions(),
+            fetch_transactions_loop(),
             fetch_jettons(),
             return_exceptions=True
         )
 
-        account_data = results[0]
-        toncenter_balance = results[1]
-        transactions_data = results[2]
-        jettons_data = results[3]
-
-        if isinstance(account_data, Exception):
-            logger.error(f"TON account fetch error: {account_data}")
-            return {"network": "TON", "address": address, "error": str(account_data)}
-
-        # ═══ 1. Hozirgi balans (tonapi.io) ═══
-        try:
-            balance_nano: int = int(account_data.get("balance", 0))
-            current_balance = balance_nano / _NANOTON_DIVISOR
-            account_status = account_data.get("status", "unknown")
-            raw_address = account_data.get("address", "").lower()
-        except Exception as e:
-            logger.error(f"Error parsing TON account data: {e}")
-            return {"network": "TON", "address": address, "error": str(e)}
+        toncenter_balance = results[0]
+        tx_loop_results = results[1]
+        jettons_data = results[2]
 
         # ═══ 2. Balansni toncenter bilan tasdiqlash (cross-check) ═══
         if toncenter_balance is not None and not isinstance(toncenter_balance, Exception):
@@ -149,38 +194,6 @@ async def get_ton_balance(
                 )
                 current_balance = min(current_balance, toncenter_balance)
                 balance_verified = True
-
-        # ═══ 3. Tranzaksiyalar (tonapi.io) & Yearly Stats ═══
-        if transactions_data and not isinstance(transactions_data, Exception):
-            transactions: list[dict] = transactions_data.get("transactions", [])
-            tx_count = len(transactions)
-
-            for tx in transactions:
-                tx_time = tx.get("utime", 0)
-                year = "Unknown"
-                if tx_time:
-                    year = str(datetime.fromtimestamp(tx_time, tz=timezone.utc).year)
-                if year not in yearly_stats:
-                    yearly_stats[year] = {"in": 0.0, "out": 0.0}
-
-                in_msg: dict | None = tx.get("in_msg")
-                if in_msg and in_msg.get("value"):
-                    src = in_msg.get("source") or {}
-                    src_addr = src.get("address", "").lower() if isinstance(src, dict) else ""
-                    if src_addr != raw_address:
-                        val = int(in_msg["value"])
-                        total_in += val
-                        yearly_stats[year]["in"] += val / _NANOTON_DIVISOR
-
-                out_msgs: list[dict] = tx.get("out_msgs", [])
-                for msg in out_msgs:
-                    if msg.get("value"):
-                        dest = msg.get("destination") or {}
-                        dest_addr = dest.get("address", "").lower() if isinstance(dest, dict) else ""
-                        if dest_addr != raw_address:
-                            val = int(msg["value"])
-                            total_out += val
-                            yearly_stats[year]["out"] += val / _NANOTON_DIVISOR
 
         # ═══ 4. Jetton balanslar ═══
         if jettons_data and not isinstance(jettons_data, Exception):

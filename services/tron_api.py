@@ -64,38 +64,121 @@ async def get_tron_usdt_balance(
             )
             return resp.json()
 
-        async def fetch_transactions() -> dict:
+        async def fetch_transactions() -> tuple[int, int, int, dict]:
+            nonlocal trx_in, trx_out, trx_tx_count
             await cb("progress_txns", 30, count=0)
             try:
-                resp = await safe_request(
-                    client, "GET",
-                    f"{_BASE_URL}/v1/accounts/{address}/transactions",
-                    headers=headers,
-                    params={"only_confirmed": "true", "limit": "200"},
-                )
-                data = resp.json()
-                txs = data.get("data", [])
-                await cb("progress_txns", 60, count=len(txs))
-                return data
+                fingerprint = None
+                page_idx = 0
+                for _ in range(50): # Max 10,000 txs
+                    params = {"only_confirmed": "true", "limit": "200"}
+                    if fingerprint:
+                        params["fingerprint"] = fingerprint
+                        
+                    resp = await safe_request(
+                        client, "GET",
+                        f"{_BASE_URL}/v1/accounts/{address}/transactions",
+                        headers=headers,
+                        params=params,
+                    )
+                    trx_data = resp.json()
+                    trx_txs = trx_data.get("data", [])
+                    
+                    if not trx_txs:
+                        break
+                        
+                    trx_tx_count += len(trx_txs)
+
+                    for tx in trx_txs:
+                        tx_time = tx.get("block_timestamp", 0)
+                        year = "Unknown"
+                        if tx_time:
+                            year = str(datetime.fromtimestamp(tx_time / 1000, tz=timezone.utc).year)
+                        if year not in yearly_stats:
+                            yearly_stats[year] = {"in": 0.0, "out": 0.0}
+
+                        raw_data = tx.get("raw_data", {})
+                        contracts = raw_data.get("contract", [])
+                        for contract in contracts:
+                            if contract.get("type") == "TransferContract":
+                                param = contract.get("parameter", {}).get("value", {})
+                                amount = param.get("amount", 0)
+                                to_addr = param.get("to_address", "")
+                                owner_addr = param.get("owner_address", "")
+
+                                if _is_same_address(to_addr, address):
+                                    trx_in += amount
+                                    yearly_stats[year]["in"] += amount / _TRX_DIVISOR
+                                if _is_same_address(owner_addr, address):
+                                    trx_out += amount
+                                    yearly_stats[year]["out"] += amount / _TRX_DIVISOR
+                                    
+                    fingerprint = trx_data.get("meta", {}).get("fingerprint")
+                    if not fingerprint:
+                        break
+
+                    page_idx += 1
+                    pct = min(60, 30 + page_idx * 3)
+                    await cb("progress_txns", pct, count=trx_tx_count)
+                    await asyncio.sleep(0.5)
             except Exception as e:
                 logger.warning(f"TRON TRX transactions error: {e}")
-                return {}
+            return trx_in, trx_out, trx_tx_count, yearly_stats
 
         async def fetch_trc20() -> dict:
             await cb("progress_tokens", 70)
             try:
-                resp = await safe_request(
-                    client, "GET",
-                    f"{_BASE_URL}/v1/accounts/{address}/transactions/trc20",
-                    headers=headers,
-                    params={"only_confirmed": "true", "limit": "200"},
-                )
-                data = resp.json()
-                await cb("progress_token_history", 90, symbol="TRC-20")
-                return data
+                address_lower = address.lower()
+                fingerprint = None
+                trc_page_idx = 0
+                for _ in range(50):
+                    params = {"only_confirmed": "true", "limit": "200"}
+                    if fingerprint:
+                        params["fingerprint"] = fingerprint
+                        
+                    resp = await safe_request(
+                        client, "GET",
+                        f"{_BASE_URL}/v1/accounts/{address}/transactions/trc20",
+                        headers=headers,
+                        params=params,
+                    )
+                    trc20_data = resp.json()
+                    trc20_txs = trc20_data.get("data", [])
+
+                    if not trc20_txs:
+                        break
+
+                    for tx in trc20_txs:
+                        value = int(tx.get("value", "0"))
+                        if value == 0:
+                            continue
+
+                        token_info = tx.get("token_info", {})
+                        symbol = token_info.get("symbol", "UNKNOWN")
+                        decimals = int(token_info.get("decimals", "6"))
+                        token_value = value / (10 ** decimals)
+
+                        if symbol not in token_data_map:
+                            token_data_map[symbol] = {"income": 0.0, "outcome": 0.0}
+
+                        to_addr_str = tx.get("to", "").lower()
+                        from_addr_str = tx.get("from", "").lower()
+
+                        if to_addr_str == address_lower:
+                            token_data_map[symbol]["income"] += token_value
+                        if from_addr_str == address_lower:
+                            token_data_map[symbol]["outcome"] += token_value
+                            
+                    fingerprint = trc20_data.get("meta", {}).get("fingerprint")
+                    if not fingerprint:
+                        break
+                    trc_page_idx += 1
+                    pct = min(95, 70 + trc_page_idx * 4)
+                    await cb("progress_token_history", pct, symbol="TRC-20")
+                    await asyncio.sleep(0.5)
             except Exception as e:
                 logger.warning(f"TRON TRC-20 fetch error: {e}")
-                return {}
+            return token_data_map
 
         # ═══ Parallel Fetching ═══
         results = await asyncio.gather(
@@ -106,7 +189,7 @@ async def get_tron_usdt_balance(
         )
 
         account_data = results[0]
-        trx_data = results[1]
+        trx_loop_results = results[1]
         trc20_data = results[2]
 
         if isinstance(account_data, Exception):
@@ -121,61 +204,6 @@ async def get_tron_usdt_balance(
         except Exception as e:
             logger.error(f"Error parsing TRON account: {e}")
             return {"network": "TRON", "address": address, "error": str(e)}
-
-        # 2. TRX tranzaksiyalari & Yearly Stats
-        if trx_data and not isinstance(trx_data, Exception):
-            trx_txs: list[dict] = trx_data.get("data", [])
-            trx_tx_count = len(trx_txs)
-
-            for tx in trx_txs:
-                tx_time = tx.get("block_timestamp", 0)
-                year = "Unknown"
-                if tx_time:
-                    year = str(datetime.fromtimestamp(tx_time / 1000, tz=timezone.utc).year)
-                if year not in yearly_stats:
-                    yearly_stats[year] = {"in": 0.0, "out": 0.0}
-
-                raw_data: dict = tx.get("raw_data", {})
-                contracts: list = raw_data.get("contract", [])
-                for contract in contracts:
-                    if contract.get("type") == "TransferContract":
-                        param: dict = contract.get("parameter", {}).get("value", {})
-                        amount: int = param.get("amount", 0)
-                        to_addr: str = param.get("to_address", "")
-                        owner_addr: str = param.get("owner_address", "")
-
-                        if _is_same_address(to_addr, address):
-                            trx_in += amount
-                            yearly_stats[year]["in"] += amount / _TRX_DIVISOR
-                        if _is_same_address(owner_addr, address):
-                            trx_out += amount
-                            yearly_stats[year]["out"] += amount / _TRX_DIVISOR
-
-        # 3. TRC-20 token tranzaksiyalari
-        if trc20_data and not isinstance(trc20_data, Exception):
-            trc20_txs: list[dict] = trc20_data.get("data", [])
-            address_lower: str = address.lower()
-
-            for tx in trc20_txs:
-                value: int = int(tx.get("value", "0"))
-                if value == 0:
-                    continue
-
-                token_info: dict = tx.get("token_info", {})
-                symbol: str = token_info.get("symbol", "UNKNOWN")
-                decimals: int = int(token_info.get("decimals", "6"))
-                token_value: float = value / (10 ** decimals)
-
-                if symbol not in token_data_map:
-                    token_data_map[symbol] = {"income": 0.0, "outcome": 0.0}
-
-                to_addr_str: str = tx.get("to", "").lower()
-                from_addr_str: str = tx.get("from", "").lower()
-
-                if to_addr_str == address_lower:
-                    token_data_map[symbol]["income"] += token_value
-                if from_addr_str == address_lower:
-                    token_data_map[symbol]["outcome"] += token_value
 
     await cb("progress_finalizing", 98)
 
