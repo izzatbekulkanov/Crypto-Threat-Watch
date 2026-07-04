@@ -55,6 +55,47 @@ async def handle_audits(request: web.Request) -> web.Response:
     return web.json_response(audits)
 
 
+async def handle_action(request: web.Request) -> web.Response:
+    """API: Foydalanuvchi amallarini bajarish."""
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+    
+    action = data.get("action")
+    target_user = data.get("user_id")
+    
+    if not action or not target_user:
+        return web.json_response({"error": "Missing parameters"}, status=400)
+        
+    try:
+        from database import toggle_admin, update_alias, approve_user, delete_user
+        
+        if action == "toggle_admin":
+            new_status = toggle_admin(target_user)
+            return web.json_response({"success": True, "result": "admin_toggled", "is_admin": new_status})
+        elif action == "edit_alias":
+            new_alias = data.get("alias")
+            if not new_alias:
+                return web.json_response({"error": "Missing alias"}, status=400)
+            update_alias(target_user, new_alias)
+            return web.json_response({"success": True, "result": "alias_updated"})
+        elif action == "approve":
+            approve_user(target_user, True)
+            return web.json_response({"success": True, "result": "user_approved"})
+        elif action == "disapprove":
+            approve_user(target_user, False)
+            return web.json_response({"success": True, "result": "user_disapproved"})
+        elif action == "delete_user":
+            delete_user(target_user)
+            return web.json_response({"success": True, "result": "user_deleted"})
+        else:
+            return web.json_response({"error": f"Unknown action: {action}"}, status=400)
+    except Exception as e:
+        logger.error(f"Error executing action {action} on user {target_user}: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
 def verify_telegram_init_data(init_data: str) -> Optional[int]:
     """Verifies Telegram Web App initData and returns user ID if valid."""
     if not init_data:
@@ -117,6 +158,7 @@ def create_web_app() -> web.Application:
     app.router.add_get("/api/stats", handle_stats)
     app.router.add_get("/api/users", handle_users)
     app.router.add_get("/api/audits", handle_audits)
+    app.router.add_post("/api/action", handle_action)
     app.router.add_static("/static/", path=str(WEBAPP_DIR), name="static")
     return app
 

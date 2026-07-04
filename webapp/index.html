@@ -1320,13 +1320,38 @@
             executeUserAction('delete_user', activeTargetUserId);
         }
 
-        function executeUserAction(action, userId, extra = {}) {
+        async function executeUserAction(action, userId, extra = {}) {
             const payload = { action, user_id: userId, ...extra };
+            
+            const params = new URLSearchParams(window.location.search);
+            const apiBase = params.get('api') || window.location.origin;
+            const initData = window.Telegram?.WebApp?.initData || '';
+
             try {
-                tg.sendData(JSON.stringify(payload));
-                tg.close();
+                const response = await fetch(apiBase + '/api/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Telegram-Init-Data': initData
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    // Refresh data live
+                    await fetchLiveData(apiBase);
+                } else {
+                    const errData = await response.json().catch(() => ({}));
+                    alert("Error: " + (errData.error || "Action failed."));
+                }
             } catch(e) {
-                alert("This action only works inside the Telegram WebApp.");
+                console.warn("API action failed, falling back to Telegram sendData:", e);
+                try {
+                    tg.sendData(JSON.stringify(payload));
+                    tg.close();
+                } catch(tgError) {
+                    alert("Action failed: " + e.message);
+                }
             }
         }
 
