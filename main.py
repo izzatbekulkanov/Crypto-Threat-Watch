@@ -246,11 +246,12 @@ def make_progress_callback(
 async def cmd_start(message: types.Message, state: FSMContext) -> None:
     """/start — til tanlash va ro'yxatdan o'tish."""
     await state.clear()
+    from aiogram.types import ReplyKeyboardRemove
     user = get_user(message.from_user.id)
 
     if user:
         lang: str = user["language"]
-        await message.answer(t("help", lang), parse_mode=ParseMode.MARKDOWN)
+        await message.answer(t("help", lang), reply_markup=ReplyKeyboardRemove(), parse_mode=ParseMode.MARKDOWN)
         return
 
     await state.set_state(Registration.choosing_language)
@@ -430,9 +431,10 @@ async def on_reject_request(callback: CallbackQuery) -> None:
 @dp.message(Command("help"))
 async def cmd_help(message: types.Message) -> None:
     """Yordam."""
+    from aiogram.types import ReplyKeyboardRemove
     user = get_user(message.from_user.id)
     lang: str = user["language"] if user else "uz"
-    await message.answer(t("help", lang), parse_mode=ParseMode.MARKDOWN)
+    await message.answer(t("help", lang), reply_markup=ReplyKeyboardRemove(), parse_mode=ParseMode.MARKDOWN)
 
 
 # ═══════════════════════════════════════════
