@@ -1020,7 +1020,11 @@ async def handle_webapp_data(message: types.Message) -> None:
         payload = json.loads(data_str)
         
         action = payload.get("action")
-        target_user = payload.get("user_id")
+        try:
+            target_user = int(payload.get("user_id"))
+        except (ValueError, TypeError):
+            logger.error(f"Invalid target user ID: {payload.get('user_id')}")
+            return
         
         if action == "toggle_admin":
             new_status = toggle_admin(target_user)

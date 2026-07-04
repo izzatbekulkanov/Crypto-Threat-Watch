@@ -63,7 +63,10 @@ async def handle_action(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid JSON"}, status=400)
     
     action = data.get("action")
-    target_user = data.get("user_id")
+    try:
+        target_user = int(data.get("user_id"))
+    except (ValueError, TypeError):
+        return web.json_response({"error": "Invalid user_id format"}, status=400)
     
     if not action or not target_user:
         return web.json_response({"error": "Missing parameters"}, status=400)
