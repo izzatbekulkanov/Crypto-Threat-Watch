@@ -352,8 +352,8 @@ async def on_alias_received(message: types.Message, state: FSMContext) -> None:
 @dp.callback_query(F.data.startswith("approve_req:"))
 async def on_approve_request(callback: CallbackQuery) -> None:
     """Admin foydalanuvchi arizasini tasdiqlaganida."""
-    user_id = callback.from_user.id
-    if not is_admin(user_id):
+    acting_admin_id = callback.from_user.id
+    if not is_admin(acting_admin_id):
         await callback.answer("⛔ Sizda yetarli huquqlar yo'q.", show_alert=True)
         return
 
@@ -363,18 +363,39 @@ async def on_approve_request(callback: CallbackQuery) -> None:
         await callback.answer("❌ Foydalanuvchi topilmadi.", show_alert=True)
         return
 
+    # Allaqachon tasdiqlangan bo'lsa, qayta bosmaylik
+    if target_user.get("is_approved"):
+        await callback.answer("ℹ️ Bu foydalanuvchi allaqachon tasdiqlangan.", show_alert=True)
+        await callback.message.edit_reply_markup(reply_markup=None)
+        return
+
     approve_user(target_user_id, True)
 
-    admin_user = get_user(user_id)
+    admin_user = get_user(acting_admin_id)
     admin_alias = admin_user["alias"] if admin_user else "Admin"
 
     alias = target_user["alias"]
     lang: str = target_user["language"] or "uz"
-    
+
     await callback.answer(f"✅ {alias} tasdiqlandi.")
-    
+
     new_text = t("admin_approved_log", lang, alias=alias, user_id=target_user_id, admin=admin_alias)
     await callback.message.edit_text(new_text, reply_markup=None)
+
+    # Boshqa barcha adminlarga ham xabar yuborish
+    all_admin_ids = get_admin_ids()
+    notify_text = f"✅ *{alias}* (`{target_user_id}`) arizasi *{admin_alias}* tomonidan tasdiqlandi."
+    for other_admin_id in all_admin_ids:
+        if other_admin_id == acting_admin_id:
+            continue
+        try:
+            await bot.send_message(
+                chat_id=other_admin_id,
+                text=notify_text,
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        except Exception as e:
+            logger.warning(f"Admin {other_admin_id} ga bildirish yuborib bo'lmadi: {e}")
 
     # Foydalanuvchini xabardor qilish
     try:
@@ -390,8 +411,8 @@ async def on_approve_request(callback: CallbackQuery) -> None:
 @dp.callback_query(F.data.startswith("reject_req:"))
 async def on_reject_request(callback: CallbackQuery) -> None:
     """Admin foydalanuvchi arizasini rad etganida."""
-    user_id = callback.from_user.id
-    if not is_admin(user_id):
+    acting_admin_id = callback.from_user.id
+    if not is_admin(acting_admin_id):
         await callback.answer("⛔ Sizda yetarli huquqlar yo'q.", show_alert=True)
         return
 
@@ -401,18 +422,39 @@ async def on_reject_request(callback: CallbackQuery) -> None:
         await callback.answer("❌ Foydalanuvchi topilmadi.", show_alert=True)
         return
 
+    # Allaqachon rad etilgan yoki tasdiqlangan bo'lsa
+    if target_user.get("is_approved"):
+        await callback.answer("ℹ️ Bu foydalanuvchi allaqachon tasdiqlangan, rad etib bo'lmaydi.", show_alert=True)
+        await callback.message.edit_reply_markup(reply_markup=None)
+        return
+
     approve_user(target_user_id, False)
 
-    admin_user = get_user(user_id)
+    admin_user = get_user(acting_admin_id)
     admin_alias = admin_user["alias"] if admin_user else "Admin"
 
     alias = target_user["alias"]
     lang: str = target_user["language"] or "uz"
-    
+
     await callback.answer(f"❌ {alias} arizasi rad etildi.")
-    
+
     new_text = t("admin_rejected_log", lang, alias=alias, user_id=target_user_id, admin=admin_alias)
     await callback.message.edit_text(new_text, reply_markup=None)
+
+    # Boshqa barcha adminlarga ham xabar yuborish
+    all_admin_ids = get_admin_ids()
+    notify_text = f"❌ *{alias}* (`{target_user_id}`) arizasi *{admin_alias}* tomonidan rad etildi."
+    for other_admin_id in all_admin_ids:
+        if other_admin_id == acting_admin_id:
+            continue
+        try:
+            await bot.send_message(
+                chat_id=other_admin_id,
+                text=notify_text,
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        except Exception as e:
+            logger.warning(f"Admin {other_admin_id} ga bildirish yuborib bo'lmadi: {e}")
 
     # Foydalanuvchini xabardor qilish
     try:
