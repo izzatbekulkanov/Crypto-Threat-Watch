@@ -97,6 +97,48 @@ async def handle_action(request: web.Request) -> web.Response:
     except Exception as e:
         logger.error(f"Error executing action {action} on user {target_user}: {e}")
         return web.json_response({"error": str(e)}, status=500)
+async def broadcast_in_background(user_ids: list[int], text: str):
+    """Barcha foydalanuvchilarga xabarni orqa fonda yuborish."""
+    import aiohttp
+    logger.info(f"Broadcasting message to {len(user_ids)} users in background...")
+    async with aiohttp.ClientSession() as session:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        for uid in user_ids:
+            payload = {
+                "chat_id": uid,
+                "text": text,
+                "parse_mode": "HTML"
+            }
+            try:
+                async with session.post(url, json=payload) as resp:
+                    await resp.read()
+            except Exception as e:
+                logger.error(f"Broadcast error for user {uid}: {e}")
+            await asyncio.sleep(0.05)
+    logger.info("Broadcast task completed.")
+
+
+async def handle_broadcast(request: web.Request) -> web.Response:
+    """API: Barcha foydalanuvchilarga xabar yuborish."""
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+    
+    message_text = data.get("message", "").strip()
+    if not message_text:
+        return web.json_response({"error": "Message content cannot be empty"}, status=400)
+        
+    users = get_all_users()
+    user_ids = [u["user_id"] for u in users]
+    
+    # Spawn background task to send messages
+    asyncio.create_task(broadcast_in_background(user_ids, message_text))
+    
+    return web.json_response({
+        "success": True, 
+        "total_queued": len(user_ids)
+    })
 
 
 def verify_telegram_init_data(init_data: str) -> Optional[int]:
@@ -162,6 +204,7 @@ def create_web_app() -> web.Application:
     app.router.add_get("/api/users", handle_users)
     app.router.add_get("/api/audits", handle_audits)
     app.router.add_post("/api/action", handle_action)
+    app.router.add_post("/api/broadcast", handle_broadcast)
     app.router.add_static("/static/", path=str(WEBAPP_DIR), name="static")
     return app
 
