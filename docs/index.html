@@ -2,1048 +2,1366 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Crypto Threat Watch</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+        }
 
         :root {
-            --bg: #080b14;
-            --bg-2: #0f1320;
-            --bg-card: #151a2e;
-            --bg-card-hover: #1c2240;
-            --accent: #00e5a0;
-            --accent-2: #00b8ff;
+            /* Flutter MD3 Palette (Dark Mode) */
+            --bg-color: #0E0E15;
+            --surface-color: #1A1A24;
+            --surface-variant: #262635;
+            --primary: #9B70FF;
+            --on-primary: #FFFFFF;
+            --primary-container: #33235B;
+            --on-primary-container: #EADDFF;
+            --secondary: #A0A0C0;
+            --accent: #00E5A0;
             --accent-dim: rgba(0, 229, 160, 0.1);
-            --accent-glow: rgba(0, 229, 160, 0.25);
-            --text: #eef2ff;
-            --text-2: #a0aec0;
-            --text-3: #5a6578;
-            --border: rgba(255,255,255,0.05);
-            --red: #ff4d6a;
-            --red-dim: rgba(255,77,106,0.1);
-            --orange: #ffaa2c;
-            --orange-dim: rgba(255,170,44,0.1);
-            --green: #00e5a0;
-            --green-dim: rgba(0,229,160,0.1);
-            --blue: #00b8ff;
-            --blue-dim: rgba(0,184,255,0.1);
-            --purple: #a855f7;
-            --purple-dim: rgba(168,85,247,0.1);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --error: #FF5449;
+            --error-dim: rgba(255, 84, 73, 0.15);
+            --warning: #FFB300;
+            --warning-dim: rgba(255, 179, 0, 0.15);
+            --success: #00E5A0;
+            --success-dim: rgba(0, 229, 160, 0.15);
+            --text-primary: #F3F3FA;
+            --text-secondary: #9FA2B2;
+            --text-muted: #646777;
+            --shadow-md: 0 8px 24px rgba(0,0,0,0.5);
+            --shadow-lg: 0 12px 32px rgba(0,0,0,0.6);
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
-            background: var(--bg);
-            color: var(--text);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: var(--bg-color);
+            color: var(--text-primary);
             min-height: 100vh;
             overflow-x: hidden;
+            display: flex;
+            justify-content: center;
             -webkit-font-smoothing: antialiased;
         }
 
-        /* Animated mesh background */
-        .mesh-bg {
+        /* Ambient flutter glows */
+        .ambient-glow {
             position: fixed;
-            inset: 0;
-            background:
-                radial-gradient(circle at 15% 15%, rgba(0,229,160,0.06) 0%, transparent 40%),
-                radial-gradient(circle at 85% 85%, rgba(0,184,255,0.05) 0%, transparent 40%),
-                radial-gradient(circle at 50% 50%, rgba(168,85,247,0.03) 0%, transparent 60%);
-            pointer-events: none;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(155, 112, 255, 0.08) 0%, transparent 70%);
+            top: -50px;
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 0;
+            pointer-events: none;
         }
 
-        .mesh-bg::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h60v60H0z' fill='none'/%3E%3Cpath d='M30 0v60M0 30h60' stroke='rgba(255,255,255,0.02)' stroke-width='0.5'/%3E%3C/svg%3E");
-            opacity: 0.5;
-        }
-
-        .app {
+        .app-container {
             position: relative;
             z-index: 1;
-            max-width: 480px;
-            margin: 0 auto;
-            padding: 0 16px 100px;
+            width: 100%;
+            max-width: 480px; /* Emulate mobile screen width */
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding-bottom: 90px; /* Space for Bottom Navigation Bar */
         }
 
-        /* Header */
-        .header {
-            padding: 28px 0 24px;
-            text-align: center;
-            animation: slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        /* Sticky Flutter AppBar */
+        .app-bar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(14, 14, 21, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 18px 16px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
 
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
+        .app-bar-title-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
-        .logo-wrap {
-            width: 64px; height: 64px;
-            margin: 0 auto 14px;
-            position: relative;
-        }
-
-        .logo-ring {
-            position: absolute;
-            inset: -4px;
-            border-radius: 20px;
-            background: conic-gradient(from 0deg, var(--accent), var(--accent-2), var(--purple), var(--accent));
-            animation: logoSpin 4s linear infinite;
-            opacity: 0.6;
-        }
-
-        @keyframes logoSpin {
-            to { transform: rotate(360deg); }
-        }
-
-        .logo-inner {
-            position: relative;
-            width: 100%; height: 100%;
-            background: var(--bg-card);
-            border-radius: 18px;
+        .app-bar-icon-wrap {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background: var(--primary-container);
             display: flex;
             align-items: center;
             justify-content: center;
+            color: var(--primary);
         }
 
-        .logo-inner svg {
-            width: 32px; height: 32px;
+        .app-bar-icon-wrap svg {
+            width: 20px;
+            height: 20px;
         }
 
-        .header h1 {
-            font-size: 22px;
+        .app-bar-text-wrap h1 {
+            font-size: 16px;
             font-weight: 800;
-            letter-spacing: -0.5px;
-            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 50%, var(--purple) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            letter-spacing: -0.2px;
+            color: var(--text-primary);
         }
 
-        .header-sub {
+        .app-bar-text-wrap span {
+            font-size: 10px;
+            color: var(--text-muted);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: block;
+            margin-top: 1px;
+        }
+
+        .app-bar-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-chip {
+            background: rgba(0, 229, 160, 0.08);
+            border: 1px solid rgba(0, 229, 160, 0.2);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            color: var(--success);
+            font-weight: 700;
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            margin-top: 6px;
-            font-size: 11px;
-            color: var(--text-3);
-            font-weight: 500;
         }
 
-        .pulse-dot {
-            width: 6px; height: 6px;
-            background: var(--accent);
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--success);
             border-radius: 50%;
-            animation: pulse 2s ease-in-out infinite;
-            box-shadow: 0 0 8px var(--accent-glow);
+            animation: pulse-glow 2s infinite;
         }
 
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(0.7); opacity: 0.4; }
+        @keyframes pulse-glow {
+            0% { transform: scale(0.95); opacity: 0.5; }
+            50% { transform: scale(1.25); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.5; }
         }
 
-        /* Stats */
-        .stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 24px;
-            animation: fadeUp 0.6s 0.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+        /* Views/Panels */
+        .view-panel {
+            display: none;
+            padding: 16px;
+            animation: slideUpFade 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
         }
 
-        @keyframes fadeUp {
+        .view-panel.active {
+            display: block;
+        }
+
+        @keyframes slideUpFade {
             from { opacity: 0; transform: translateY(16px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .stat {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 16px 8px;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .stat:active { transform: scale(0.95); }
-
-        .stat::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 20%; right: 20%;
-            height: 2px;
-            border-radius: 0 0 4px 4px;
-        }
-
-        .stat:nth-child(1)::before { background: linear-gradient(90deg, transparent, var(--accent), transparent); }
-        .stat:nth-child(2)::before { background: linear-gradient(90deg, transparent, var(--blue), transparent); }
-        .stat:nth-child(3)::before { background: linear-gradient(90deg, transparent, var(--purple), transparent); }
-
-        .stat-icon {
-            width: 32px; height: 32px;
-            margin: 0 auto 8px;
-            border-radius: 10px;
+        /* MD3 SearchBar */
+        .search-bar {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 28px;
+            padding: 0 16px;
+            height: 52px;
             display: flex;
             align-items: center;
-            justify-content: center;
-        }
-
-        .stat:nth-child(1) .stat-icon { background: var(--green-dim); }
-        .stat:nth-child(2) .stat-icon { background: var(--blue-dim); }
-        .stat:nth-child(3) .stat-icon { background: var(--purple-dim); }
-
-        .stat-icon svg { width: 16px; height: 16px; }
-
-        .stat-val {
-            font-size: 28px;
-            font-weight: 800;
-            line-height: 1;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .stat:nth-child(1) .stat-val { color: var(--accent); }
-        .stat:nth-child(2) .stat-val { color: var(--blue); }
-        .stat:nth-child(3) .stat-val { color: var(--purple); }
-
-        .stat-lbl {
-            font-size: 9px;
-            color: var(--text-3);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-top: 6px;
-            font-weight: 700;
-        }
-
-        /* Tabs */
-        .tabs {
-            display: flex;
-            gap: 4px;
-            background: var(--bg-2);
-            border-radius: 14px;
-            padding: 4px;
+            gap: 12px;
             margin-bottom: 20px;
-            border: 1px solid var(--border);
-            animation: fadeUp 0.6s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
 
-        .tab {
-            flex: 1;
-            padding: 10px 8px;
-            border-radius: 11px;
-            font-size: 12px;
-            font-weight: 700;
-            text-align: center;
-            color: var(--text-3);
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
+        .search-bar:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(155, 112, 255, 0.15);
+            background: var(--surface-variant);
         }
 
-        .tab svg { width: 14px; height: 14px; opacity: 0.6; transition: opacity 0.3s; }
-        .tab.active svg { opacity: 1; }
-
-        .tab.active {
-            background: var(--bg-card);
-            color: var(--accent);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
+        .search-bar svg {
+            width: 20px;
+            height: 20px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
         }
 
-        /* Panels */
-        .panel { display: none; }
-        .panel.active { display: block; animation: panelIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
-
-        @keyframes panelIn {
-            from { opacity: 0; transform: translateX(12px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-
-        /* Search */
-        .search {
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 11px 14px;
-            margin-bottom: 14px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            transition: border-color 0.2s;
-        }
-
-        .search:focus-within { border-color: rgba(0,229,160,0.3); }
-        .search svg { width: 16px; height: 16px; color: var(--text-3); flex-shrink: 0; }
-
-        .search input {
+        .search-bar input {
             flex: 1;
             background: none;
             border: none;
-            outline: none;
-            color: var(--text);
-            font-size: 13px;
-            font-family: inherit;
+            color: var(--text-primary);
+            font-size: 14px;
             font-weight: 500;
+            font-family: inherit;
         }
 
-        .search input::placeholder { color: var(--text-3); }
+        .search-bar input::placeholder {
+            color: var(--text-muted);
+        }
 
-        /* Section header */
-        .sec-head {
+        /* section header */
+        .section-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
             margin-bottom: 12px;
-            padding: 0 2px;
+            padding: 0 4px;
         }
 
-        .sec-title { font-size: 13px; font-weight: 700; color: var(--text-2); }
-
-        .sec-badge {
-            font-size: 10px;
-            color: var(--text-3);
-            background: var(--bg-2);
-            padding: 3px 10px;
-            border-radius: 20px;
+        .section-title {
+            font-size: 13px;
             font-weight: 700;
-            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
-        /* User card */
-        .u-card {
-            background: var(--bg-card);
-            border-radius: 14px;
-            padding: 14px 16px;
-            margin-bottom: 8px;
-            border: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            transition: all 0.2s;
-            animation: cardIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+        .section-count-badge {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--primary);
+            background: var(--primary-container);
+            padding: 2px 10px;
+            border-radius: 12px;
         }
 
-        .u-card:active { transform: scale(0.97); background: var(--bg-card-hover); }
-
-        @keyframes cardIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        /* Flutter Cards Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
         }
 
-        .u-avatar {
-            width: 42px; height: 42px;
-            border-radius: 13px;
+        .stat-card {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 16px 8px;
+            text-align: center;
+            box-shadow: var(--shadow-md);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+
+        .stat-card:active {
+            transform: scale(0.96);
+        }
+
+        .stat-card-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 15px;
-            font-weight: 800;
-            flex-shrink: 0;
-            position: relative;
+            margin: 0 auto 10px;
         }
 
-        .u-avatar.admin {
-            background: linear-gradient(135deg, #f59e0b, #f97316);
-            color: #fff;
-            box-shadow: 0 4px 12px rgba(245,158,11,0.3);
+        .stat-card:nth-child(1) .stat-card-icon { background: rgba(155, 112, 255, 0.12); color: var(--primary); }
+        .stat-card:nth-child(2) .stat-card-icon { background: rgba(0, 184, 255, 0.12); color: #00b8ff; }
+        .stat-card:nth-child(3) .stat-card-icon { background: rgba(0, 229, 160, 0.12); color: var(--accent); }
+
+        .stat-card-icon svg {
+            width: 18px;
+            height: 18px;
         }
 
-        .u-avatar.user {
-            background: var(--accent-dim);
-            color: var(--accent);
-            border: 1px solid rgba(0,229,160,0.2);
+        .stat-card-value {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 26px;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 4px;
         }
 
-        .u-avatar .crown-badge {
-            position: absolute;
-            top: -4px; right: -4px;
-            width: 16px; height: 16px;
-            background: #f59e0b;
+        .stat-card:nth-child(1) .stat-card-value { color: var(--primary); }
+        .stat-card:nth-child(2) .stat-card-value { color: #00b8ff; }
+        .stat-card:nth-child(3) .stat-card-value { color: var(--accent); }
+
+        .stat-card-label {
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        /* Material List Item / User Card */
+        .list-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .flutter-card {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            padding: 14px;
+            box-shadow: var(--shadow-md);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .flutter-card:hover {
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        .card-header-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .avatar-circle {
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            border: 2px solid var(--bg-card);
+            font-size: 16px;
+            font-weight: 800;
+            color: #FFFFFF;
+            flex-shrink: 0;
+            position: relative;
+            background: var(--surface-variant);
         }
 
-        .u-avatar .crown-badge svg { width: 8px; height: 8px; }
+        .avatar-circle.admin {
+            background: linear-gradient(135deg, #FF9100, #F50057);
+            box-shadow: 0 4px 12px rgba(245, 0, 87, 0.25);
+        }
 
-        .u-info { flex: 1; min-width: 0; }
+        .avatar-circle.user {
+            background: linear-gradient(135deg, var(--primary), #3b82f6);
+            box-shadow: 0 4px 12px rgba(155, 112, 255, 0.25);
+        }
 
-        .u-name {
+        .avatar-crown {
+            position: absolute;
+            top: -3px;
+            right: -3px;
+            width: 16px;
+            height: 16px;
+            background: #FFB300;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--surface-color);
+        }
+
+        .avatar-crown svg {
+            width: 8px;
+            height: 8px;
+            fill: #fff;
+        }
+
+        .card-title-block {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .card-name-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .card-title {
             font-size: 14px;
             font-weight: 700;
-            color: var(--text);
+            color: var(--text-primary);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
-        .u-meta {
-            font-size: 11px;
-            color: var(--text-3);
-            margin-top: 2px;
+        .md3-chip {
+            font-size: 8px;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-flex;
+            align-items: center;
+            height: 16px;
         }
 
-        .u-stat {
+        .chip-admin { background: rgba(255, 179, 0, 0.12); color: var(--warning); border: 1px solid rgba(255, 179, 0, 0.25); }
+        .chip-approved { background: rgba(0, 229, 160, 0.12); color: var(--success); border: 1px solid rgba(0, 229, 160, 0.25); }
+        .chip-pending { background: rgba(255, 84, 73, 0.12); color: var(--error); border: 1px solid rgba(255, 84, 73, 0.25); }
+
+        .card-subtitle {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 1px;
+        }
+
+        .card-stat-block {
             text-align: right;
             flex-shrink: 0;
         }
 
-        .u-stat-val {
-            font-size: 20px;
-            font-weight: 800;
-            color: var(--text);
+        .card-stat-val {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
         }
 
-        .u-stat-lbl {
+        .card-stat-lbl {
             font-size: 9px;
-            color: var(--text-3);
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        /* Action Buttons Row */
+        .card-actions-row {
+            display: flex;
+            gap: 6px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 10px;
+        }
+
+        /* Flutter MD3 Button Styles */
+        .md3-btn {
+            flex: 1;
+            height: 34px;
+            border: none;
+            border-radius: 17px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .md3-btn:active {
+            transform: scale(0.96);
+            opacity: 0.85;
+        }
+
+        .md3-btn-tonal {
+            background: var(--surface-variant);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .md3-btn-tonal:hover {
+            background: rgba(255,255,255,0.04);
+        }
+
+        .md3-btn-primary {
+            background: var(--primary-container);
+            color: var(--on-primary-container);
+            border: 1px solid rgba(155, 112, 255, 0.2);
+        }
+
+        .md3-btn-success {
+            background: rgba(0, 229, 160, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(0, 229, 160, 0.2);
+        }
+
+        .md3-btn-error {
+            background: var(--error-dim);
+            color: var(--error);
+            border: 1px solid rgba(255, 84, 73, 0.2);
+        }
+
+        .md3-btn-icon-only {
+            flex: 0 0 34px;
+            width: 34px;
+        }
+
+        .md3-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        /* Audit Card specifics */
+        .net-badge {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .net-ton { background: rgba(0, 152, 234, 0.1); color: #0098ea; border: 1px solid rgba(0, 152, 234, 0.2); }
+        .net-eth { background: rgba(98, 126, 234, 0.1); color: #627eea; border: 1px solid rgba(98, 126, 234, 0.2); }
+        .net-tron { background: rgba(239, 44, 44, 0.1); color: #ef2c2c; border: 1px solid rgba(239, 44, 44, 0.2); }
+
+        .risk-badge {
+            font-size: 9px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 20px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            font-weight: 600;
         }
 
-        /* Audit card */
-        .a-card {
-            background: var(--bg-card);
-            border-radius: 14px;
-            padding: 14px 16px;
-            margin-bottom: 8px;
-            border: 1px solid var(--border);
-            transition: all 0.2s;
-            animation: cardIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+        .risk-low { background: rgba(0, 229, 160, 0.1); color: var(--success); border: 1px solid rgba(0, 229, 160, 0.2); }
+        .risk-medium { background: rgba(255, 179, 0, 0.1); color: var(--warning); border: 1px solid rgba(255, 179, 0, 0.2); }
+        .risk-high { background: rgba(255, 84, 73, 0.1); color: var(--error); border: 1px solid rgba(255, 84, 73, 0.2); }
+        .risk-critical {
+            background: rgba(255, 84, 73, 0.25);
+            color: #FF2E2E;
+            border: 1px solid #FF5449;
+            box-shadow: 0 0 10px rgba(255, 84, 73, 0.2);
+            animation: pulse-border 1.5s infinite;
         }
 
-        .a-card:active { transform: scale(0.97); background: var(--bg-card-hover); }
+        @keyframes pulse-border {
+            0% { border-color: rgba(255, 84, 73, 0.3); }
+            50% { border-color: rgba(255, 84, 73, 0.9); }
+            100% { border-color: rgba(255, 84, 73, 0.3); }
+        }
 
-        .a-top {
+        .address-box {
+            background: var(--surface-variant);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-family: 'SF Mono', 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: #cbd5e1;
+            word-break: break-all;
+            user-select: all;
+            border: 1px solid rgba(255, 255, 255, 0.03);
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 10px;
         }
 
-        .a-net {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
+        .address-box .copy-btn {
+            background: transparent;
+            border: none;
+            color: var(--primary);
+            font-size: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-left: 6px;
+        }
+
+        .summary-box {
             font-size: 11px;
-            font-weight: 800;
-            padding: 5px 10px;
-            border-radius: 8px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            border-left: 2px solid var(--primary);
+            padding-left: 8px;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+            font-size: 13px;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            box-shadow: var(--shadow-md);
+        }
+
+        .empty-state svg {
+            width: 44px;
+            height: 44px;
+            color: var(--text-muted);
+            opacity: 0.3;
+        }
+
+        /* Skeletons */
+        .skeleton {
+            background: linear-gradient(90deg, var(--surface-variant) 25%, #2d2d3d 50%, var(--surface-variant) 75%);
+            background-size: 200% 100%;
+            animation: loading-shimmer 1.5s infinite;
+        }
+
+        @keyframes loading-shimmer {
+            to { background-position-x: -200%; }
+        }
+
+        .skel-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+        .skel-stat { height: 104px; border-radius: 16px; }
+        .skel-card { height: 128px; border-radius: 18px; margin-bottom: 8px; }
+
+        /* Sticky Bottom Navigation Bar (Flutter Style) */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 480px;
+            height: 80px;
+            background: rgba(14, 14, 21, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 0 8px env(safe-area-inset-bottom, 0px);
+            z-index: 100;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            width: 64px;
+            gap: 4px;
+            user-select: none;
+        }
+
+        .nav-icon-container {
+            width: 52px;
+            height: 28px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+        }
+
+        .nav-icon-container svg {
+            width: 18px;
+            height: 18px;
+            color: var(--text-secondary);
+            transition: color 0.2s, transform 0.2s;
+        }
+
+        .nav-item.active .nav-icon-container {
+            background: var(--primary-container);
+        }
+
+        .nav-item.active .nav-icon-container svg {
+            color: var(--on-primary-container);
+            transform: scale(1.08);
+        }
+
+        .nav-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-muted);
+            transition: color 0.2s;
+            text-transform: uppercase;
             letter-spacing: 0.3px;
         }
 
-        .a-net svg { width: 14px; height: 14px; }
-        .a-net.ton { background: var(--green-dim); color: var(--green); }
-        .a-net.eth { background: var(--blue-dim); color: var(--blue); }
-        .a-net.tron { background: var(--red-dim); color: var(--red); }
-
-        .risk {
-            font-size: 10px;
-            font-weight: 800;
-            padding: 4px 10px;
-            border-radius: 20px;
-            letter-spacing: 0.5px;
+        .nav-item.active .nav-label {
+            color: var(--text-primary);
         }
 
-        .risk-low { background: var(--green-dim); color: var(--green); }
-        .risk-medium { background: var(--orange-dim); color: var(--orange); }
-        .risk-high { background: var(--red-dim); color: var(--red); }
-        .risk-critical { background: rgba(220,38,38,0.15); color: #f87171; border: 1px solid rgba(220,38,38,0.2); }
-
-        .a-addr {
-            font-size: 11px;
-            font-family: 'SF Mono', 'JetBrains Mono', monospace;
-            color: var(--text-2);
-            background: var(--bg);
-            padding: 8px 12px;
-            border-radius: 8px;
-            word-break: break-all;
-            margin-bottom: 10px;
-            border: 1px solid var(--border);
-            line-height: 1.4;
-        }
-
-        .a-foot {
+        /* Custom MD3 Flutter Dialog Overlays */
+        .dialog-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: center;
+            padding: 20px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
         }
 
-        .a-user, .a-date {
-            font-size: 11px;
-            color: var(--text-3);
-            display: flex;
-            align-items: center;
-            gap: 4px;
+        .dialog-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
         }
 
-        .a-user svg, .a-date svg { width: 12px; height: 12px; }
-
-        /* Skeleton loader */
-        .skeleton {
-            animation: shimmer 1.5s infinite;
-            background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-card-hover) 50%, var(--bg-card) 75%);
-            background-size: 200% 100%;
-            border-radius: 10px;
+        .md3-dialog {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 28px;
+            padding: 24px;
+            width: 100%;
+            max-width: 320px;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.9);
+            transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
-        @keyframes shimmer {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
+        .dialog-overlay.active .md3-dialog {
+            transform: scale(1);
         }
 
-        .skel-card {
-            height: 72px;
-            margin-bottom: 8px;
-            border-radius: 14px;
+        .dialog-icon {
+            width: 32px;
+            height: 32px;
+            color: var(--primary);
+            margin-bottom: 12px;
         }
 
-        .skel-stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 24px;
+        .dialog-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--text-primary);
         }
 
-        .skel-stat { height: 90px; border-radius: 14px; }
-
-        /* Empty state */
-        .empty {
-            text-align: center;
-            padding: 48px 20px;
-        }
-
-        .empty svg { width: 56px; height: 56px; color: var(--text-3); opacity: 0.4; margin-bottom: 14px; }
-        .empty-title { font-size: 15px; font-weight: 700; color: var(--text-2); margin-bottom: 4px; }
-        .empty-desc { font-size: 12px; color: var(--text-3); }
-
-        /* Overview bars */
-        .bar-wrap {
-            background: var(--bg-card);
-            border-radius: 14px;
-            padding: 14px 16px;
-            margin-bottom: 8px;
-            border: 1px solid var(--border);
-        }
-
-        .bar-head {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-
-        .bar-name { font-size: 13px; font-weight: 700; }
-        .bar-val { font-size: 12px; color: var(--text-3); font-weight: 600; }
-
-        .bar-track {
-            height: 6px;
-            background: var(--bg);
-            border-radius: 3px;
-            overflow: hidden;
-        }
-
-        .bar-fill {
-            height: 100%;
-            border-radius: 3px;
-            transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
-            width: 0;
-        }
-
-        /* Risk grid */
-        .risk-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
+        .dialog-body {
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--text-secondary);
             margin-bottom: 20px;
         }
 
-        .risk-box {
-            background: var(--bg-card);
-            border-radius: 14px;
-            padding: 16px;
-            border: 1px solid var(--border);
-            text-align: center;
+        .dialog-input {
+            width: 100%;
+            height: 48px;
+            background: var(--surface-variant);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0 14px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+            margin-bottom: 20px;
+            margin-top: 8px;
         }
 
-        .risk-box-val { font-size: 28px; font-weight: 800; line-height: 1; }
-        .risk-box-lbl { font-size: 10px; color: var(--text-3); margin-top: 6px; font-weight: 600; }
-
-        /* Floating particles */
-        .particles {
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            z-index: 0;
-            overflow: hidden;
+        .dialog-input:focus {
+            border-color: var(--primary);
         }
 
-        .particle {
-            position: absolute;
-            width: 2px; height: 2px;
-            background: var(--accent);
-            border-radius: 50%;
-            opacity: 0;
-            animation: float 8s infinite;
+        .dialog-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
         }
 
-        @keyframes float {
-            0% { opacity: 0; transform: translateY(100vh) scale(0); }
-            10% { opacity: 0.6; }
-            90% { opacity: 0.2; }
-            100% { opacity: 0; transform: translateY(-20px) scale(1); }
+        .dialog-btn {
+            height: 36px;
+            padding: 0 16px;
+            border-radius: 18px;
+            font-size: 12px;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
         }
 
-        .safe-area { height: env(safe-area-inset-bottom, 20px); }
+        .dialog-btn:active {
+            transform: scale(0.95);
+        }
 
-        ::-webkit-scrollbar { width: 3px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .dialog-btn-text {
+            background: none;
+            color: var(--primary);
+        }
+
+        .dialog-btn-filled {
+            background: var(--primary);
+            color: var(--on-primary);
+            box-shadow: 0 4px 12px rgba(155, 112, 255, 0.2);
+        }
+
+        .dialog-btn-error {
+            background: var(--error);
+            color: #FFFFFF;
+            box-shadow: 0 4px 12px rgba(255, 84, 73, 0.25);
+        }
+
+        .safe-bottom-space {
+            height: env(safe-area-inset-bottom, 20px);
+        }
     </style>
 </head>
 <body>
-    <div class="mesh-bg"></div>
-    <div class="particles" id="particles"></div>
+    <div class="ambient-glow"></div>
 
-    <div class="app">
-        <div class="header">
-            <div class="logo-wrap">
-                <div class="logo-ring"></div>
-                <div class="logo-inner">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent)">
+    <div class="app-container">
+        <!-- Sticky AppBar -->
+        <header class="app-bar">
+            <div class="app-bar-title-section">
+                <div class="app-bar-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                         <path d="M9 12l2 2 4-4"/>
                     </svg>
                 </div>
-            </div>
-            <h1>Crypto Threat Watch</h1>
-            <div class="header-sub">
-                <div class="pulse-dot"></div>
-                <span>Admin Dashboard</span>
-            </div>
-        </div>
-
-        <!-- Stats skeleton (shown initially) -->
-        <div id="stats-skeleton" class="skel-stats">
-            <div class="skeleton skel-stat"></div>
-            <div class="skeleton skel-stat"></div>
-            <div class="skeleton skel-stat"></div>
-        </div>
-
-        <!-- Real stats (hidden initially) -->
-        <div class="stats" id="stats-real" style="display:none;">
-            <div class="stat">
-                <div class="stat-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                <div class="app-bar-text-wrap">
+                    <h1>Crypto Threat Watch</h1>
+                    <span>Security Dashboard</span>
                 </div>
-                <div class="stat-val" id="sv-users">0</div>
-                <div class="stat-lbl">Users</div>
             </div>
-            <div class="stat">
-                <div class="stat-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <div class="app-bar-actions">
+                <div class="status-chip">
+                    <span class="status-dot"></span>
+                    <span>SECURE</span>
                 </div>
-                <div class="stat-val" id="sv-queries">0</div>
-                <div class="stat-lbl">Queries</div>
             </div>
-            <div class="stat">
-                <div class="stat-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2.5" stroke-linecap="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+        </header>
+
+        <!-- Skeletons shown initially -->
+        <div id="stats-skeleton" class="view-panel active" style="padding-top: 16px;">
+            <div class="skel-stats">
+                <div class="skeleton skel-stat"></div>
+                <div class="skeleton skel-stat"></div>
+                <div class="skeleton skel-stat"></div>
+            </div>
+            <div class="skeleton skel-card"></div>
+            <div class="skeleton skel-card"></div>
+            <div class="skeleton skel-card"></div>
+        </div>
+
+        <!-- Real Stats (Hidden initially, shown after load) -->
+        <main id="main-content" style="display: none;">
+            <!-- Users View -->
+            <section class="view-panel active" id="p-users">
+                <div class="search-bar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                    <input type="text" placeholder="Search users by alias..." oninput="filterUsers(this.value)">
                 </div>
-                <div class="stat-val" id="sv-audits">0</div>
-                <div class="stat-lbl">Audits</div>
+                <div class="section-header">
+                    <span class="section-title">All Registered Users</span>
+                    <span class="section-count-badge" id="cnt-users">0</span>
+                </div>
+                <div id="list-users" class="list-container">
+                    <!-- Dynamic users populated here -->
+                </div>
+            </section>
+
+            <!-- Audits View -->
+            <section class="view-panel" id="p-audits">
+                <div class="search-bar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                    <input type="text" placeholder="Search address, network, risk..." oninput="filterAudits(this.value)">
+                </div>
+                <div class="section-header">
+                    <span class="section-title">Recent Wallet Audits</span>
+                    <span class="section-count-badge" id="cnt-audits">0</span>
+                </div>
+                <div id="list-audits" class="list-container">
+                    <!-- Dynamic audits populated here -->
+                </div>
+            </section>
+
+            <!-- Stats / Overview View -->
+            <section class="view-panel" id="p-overview">
+                <div class="section-header">
+                    <span class="section-title">System Metrics</span>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                        </div>
+                        <div class="stat-card-value" id="sv-users">0</div>
+                        <div class="stat-card-label">Users</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                        </div>
+                        <div class="stat-card-value" id="sv-queries">0</div>
+                        <div class="stat-card-label">Queries</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                        </div>
+                        <div class="stat-card-value" id="sv-audits">0</div>
+                        <div class="stat-card-label">Audits</div>
+                    </div>
+                </div>
+
+                <div class="section-header" style="margin-top: 24px;">
+                    <span class="section-title">Security Node Status</span>
+                </div>
+                <div class="flutter-card" style="padding: 16px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+                        <span style="font-weight:700; font-size:13px; color:var(--text-secondary);">Local Node Port</span>
+                        <span style="font-family:monospace; font-size:13px; font-weight:700; color:var(--primary);">8443 (Active)</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+                        <span style="font-weight:700; font-size:13px; color:var(--text-secondary);">Tunnel Service</span>
+                        <span style="font-size:13px; font-weight:700; color:var(--success);">localhost.run (Online)</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="font-weight:700; font-size:13px; color:var(--text-secondary);">Database Engines</span>
+                        <span style="font-size:13px; font-weight:700; color:#00b8ff;">SQLite (WAL Enabled)</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Sticky Flutter Bottom Navigation Bar -->
+        <nav class="bottom-nav">
+            <div class="nav-item active" data-tab="users">
+                <div class="nav-icon-container">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                </div>
+                <span class="nav-label">Users</span>
+            </div>
+            <div class="nav-item" data-tab="audits">
+                <div class="nav-icon-container">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+                </div>
+                <span class="nav-label">Audits</span>
+            </div>
+            <div class="nav-item" data-tab="overview">
+                <div class="nav-icon-container">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                </div>
+                <span class="nav-label">Metrics</span>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Flutter-style custom dialog overlays (MD3) -->
+    <!-- Edit Alias Dialog -->
+    <div id="dlg-alias-overlay" class="dialog-overlay">
+        <div class="md3-dialog">
+            <div class="dialog-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </div>
+            <div class="dialog-title">Edit User Alias</div>
+            <div class="dialog-body">Enter a new alias for this user. This helps identify the user in audit logs.</div>
+            <input type="text" id="dlg-alias-input" class="dialog-input" placeholder="Enter alias...">
+            <div class="dialog-actions">
+                <button onclick="closeDialog('dlg-alias-overlay')" class="dialog-btn dialog-btn-text">Cancel</button>
+                <button onclick="submitEditAlias()" class="dialog-btn dialog-btn-filled">Save</button>
             </div>
         </div>
+    </div>
 
-        <!-- Tabs -->
-        <div class="tabs">
-            <div class="tab active" data-tab="users">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                Users
+    <!-- Delete Confirm Dialog -->
+    <div id="dlg-delete-overlay" class="dialog-overlay">
+        <div class="md3-dialog">
+            <div class="dialog-icon" style="color: var(--error);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             </div>
-            <div class="tab" data-tab="audits">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
-                Audits
-            </div>
-            <div class="tab" data-tab="overview">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
-                Stats
+            <div class="dialog-title" style="color: var(--error);">Delete User?</div>
+            <div class="dialog-body">Are you sure you want to permanently delete this user? This action will remove all their data and cannot be undone.</div>
+            <div class="dialog-actions">
+                <button onclick="closeDialog('dlg-delete-overlay')" class="dialog-btn dialog-btn-text">Cancel</button>
+                <button onclick="submitDeleteUser()" class="dialog-btn dialog-btn-error">Delete</button>
             </div>
         </div>
-
-        <!-- Users Panel -->
-        <div class="panel active" id="p-users">
-            <div class="search">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-                <input type="text" placeholder="Search users..." oninput="filterUsers(this.value)">
-            </div>
-            <div class="sec-head">
-                <span class="sec-title">All Users</span>
-                <span class="sec-badge" id="cnt-users">0</span>
-            </div>
-            <div id="list-users">
-                <div class="skeleton skel-card"></div>
-                <div class="skeleton skel-card"></div>
-                <div class="skeleton skel-card"></div>
-            </div>
-        </div>
-
-        <!-- Audits Panel -->
-        <div class="panel" id="p-audits">
-            <div class="search">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-                <input type="text" placeholder="Search address, network..." oninput="filterAudits(this.value)">
-            </div>
-            <div class="sec-head">
-                <span class="sec-title">Recent Audits</span>
-                <span class="sec-badge" id="cnt-audits">0</span>
-            </div>
-            <div id="list-audits">
-                <div class="skeleton skel-card"></div>
-                <div class="skeleton skel-card"></div>
-                <div class="skeleton skel-card"></div>
-            </div>
-        </div>
-
-        <!-- Overview Panel -->
-        <div class="panel" id="p-overview">
-            <div id="overview-content">
-                <div class="skeleton skel-card"></div>
-                <div class="skeleton skel-card"></div>
-            </div>
-        </div>
-
-        <div class="safe-area"></div>
     </div>
 
     <script>
-    // ═══ Telegram WebApp ═══
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    tg.expand();
-    try { tg.setHeaderColor('#080b14'); tg.setBackgroundColor('#080b14'); } catch(e) {}
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
 
-    // ═══ Particles ═══
-    (function createParticles() {
-        const container = document.getElementById('particles');
-        for (let i = 0; i < 20; i++) {
-            const p = document.createElement('div');
-            p.className = 'particle';
-            p.style.left = Math.random() * 100 + '%';
-            p.style.animationDelay = Math.random() * 8 + 's';
-            p.style.animationDuration = (6 + Math.random() * 6) + 's';
-            container.appendChild(p);
-        }
-    })();
+        let appData = {
+            stats: { total_users: 0, total_queries: 0, total_audits: 0 },
+            users: [],
+            audits: []
+        };
 
-    // ═══ State ═══
-    let allUsers = [];
-    let allAudits = [];
+        let currentTab = 'users';
+        let searchQueryUsers = '';
+        let searchQueryAudits = '';
 
-    // ═══ Tabs ═══
-    document.querySelectorAll('.tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-            tab.classList.add('active');
-            document.getElementById('p-' + tab.dataset.tab).classList.add('active');
+        // Dialog states
+        let activeTargetUserId = null;
+
+        // ═══ Navigation Tabs (Bottom Bar) ═══
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const tab = item.dataset.tab;
+                document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+                document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+                
+                item.classList.add('active');
+                document.getElementById('p-' + tab).classList.add('active');
+                currentTab = tab;
+            });
         });
-    });
 
-    // ═══ Data Loading ═══
-    function loadData() {
-        try {
-            // Query param "?d=" dan ma'lumot olish (Telegram hash'ni o'chiradi!)
-            const params = new URLSearchParams(window.location.search);
-            const rawData = params.get('d') || '';
-
-            if (!rawData) {
-                showEmpty('list-users', 'No data', 'Use /web command in bot to open this panel.');
-                return;
+        // ═══ Custom Dialog Helpers ═══
+        function openDialog(overlayId, userId = null) {
+            activeTargetUserId = userId;
+            const overlay = document.getElementById(overlayId);
+            overlay.classList.add('active');
+            if (overlayId === 'dlg-alias-overlay') {
+                const user = appData.users.find(u => (u.user_id === userId || u.id === userId));
+                document.getElementById('dlg-alias-input').value = user ? user.alias : '';
+                document.getElementById('dlg-alias-input').focus();
             }
-
-            // Pure JS base64url decoder — atob() ishlatmasdan
-            function base64urlDecodeToBytes(str) {
-                str = str.replace(/-/g, '+').replace(/_/g, '/');
-                while (str.length % 4) str += '=';
-                const table = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-                const lookup = {};
-                for (let i = 0; i < table.length; i++) lookup[table[i]] = i;
-                const bytes = [];
-                let buf = 0, bits = 0;
-                for (let i = 0; i < str.length; i++) {
-                    const c = str[i];
-                    if (c === '=') break;
-                    if (!(c in lookup)) continue;
-                    buf = (buf << 6) | lookup[c];
-                    bits += 6;
-                    if (bits >= 8) {
-                        bits -= 8;
-                        bytes.push((buf >> bits) & 0xFF);
-                    }
-                }
-                return new Uint8Array(bytes);
-            }
-
-            const bytes = base64urlDecodeToBytes(rawData);
-            const jsonStr = new TextDecoder('utf-8').decode(bytes);
-            const compact = JSON.parse(jsonStr);
-
-            // Expand compact data
-            const data = {
-                stats: compact.s || {},
-                users: (compact.u || []).map(u => ({
-                    alias: u.a || '',
-                    username: u.u || '',
-                    query_count: u.q || 0,
-                    registered_at: u.d || '',
-                    is_admin: u.ad || 0,
-                })),
-                audits: (compact.a || []).map(a => ({
-                    network: a.n || '',
-                    address: a.addr || '',
-                    risk_level: a.r || 'LOW',
-                    alias: a.al || '',
-                    created_at: a.t || '',
-                })),
-            };
-
-            render(data);
-        } catch (e) {
-            showEmpty('list-users', 'Error', e.message);
-        }
-    }
-
-    function render(data) {
-        const stats = data.stats || {};
-        allUsers = data.users || [];
-        allAudits = data.audits || [];
-
-        // Show real stats, hide skeleton
-        document.getElementById('stats-skeleton').style.display = 'none';
-        document.getElementById('stats-real').style.display = '';
-
-        // Animate numbers
-        animateNum('sv-users', stats.total_users || allUsers.length);
-        animateNum('sv-queries', stats.total_queries || 0);
-        animateNum('sv-audits', stats.total_audits || allAudits.length);
-
-        renderUsers(allUsers);
-        renderAudits(allAudits);
-        renderOverview(stats, allUsers, allAudits);
-    }
-
-    function animateNum(id, target) {
-        const el = document.getElementById(id);
-        const dur = 800;
-        const start = performance.now();
-        function tick(now) {
-            const p = Math.min((now - start) / dur, 1);
-            const ease = 1 - Math.pow(1 - p, 4);
-            el.textContent = Math.round(target * ease);
-            if (p < 1) requestAnimationFrame(tick);
-        }
-        requestAnimationFrame(tick);
-    }
-
-    // ═══ Render Users ═══
-    function renderUsers(users) {
-        const el = document.getElementById('list-users');
-        document.getElementById('cnt-users').textContent = users.length;
-
-        if (!users.length) {
-            showEmpty('list-users', 'No users', 'Users will appear after registration');
-            return;
         }
 
-        el.innerHTML = users.map((u, i) => {
-            const init = (u.alias || '?')[0].toUpperCase();
-            const cls = u.is_admin ? 'admin' : 'user';
-            const crown = u.is_admin ? `<div class="crown-badge"><svg viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M2 4l3 12h14l3-12-5 4-5-4-5 4z"/></svg></div>` : '';
-            const isAdminStr = u.is_admin ? "Remove Admin" : "Make Admin";
-            return `<div class="u-card" style="animation-delay:${i*40}ms; display: flex; flex-direction: column; align-items: stretch; gap: 10px;">
-                <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
-                    <div class="u-avatar ${cls}">${init}${crown}</div>
-                    <div class="u-info">
-                        <div class="u-name">${u.alias}</div>
-                        <div class="u-meta">${u.username ? '@'+u.username : 'no username'} · ${u.registered_at || '—'}</div>
-                    </div>
-                    <div class="u-stat">
-                        <div class="u-stat-val">${u.query_count}</div>
-                        <div class="u-stat-lbl">queries</div>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="manageUser('toggle_admin', ${u.id})" style="flex:1; padding: 6px; background: var(--bg-2); border: 1px solid var(--border); color: var(--text-2); border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer;">${isAdminStr}</button>
-                    <button onclick="manageUser('edit_alias', ${u.id})" style="flex:1; padding: 6px; background: var(--bg-2); border: 1px solid var(--border); color: var(--accent); border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer;">Edit Alias</button>
-                </div>
-            </div>`;
-        }).join('');
-    }
+        function closeDialog(overlayId) {
+            document.getElementById(overlayId).classList.remove('active');
+            activeTargetUserId = null;
+        }
 
-    function manageUser(action, userId) {
-        let payload = { action: action, user_id: userId };
-        if (action === 'edit_alias') {
-            const newAlias = prompt("Enter new alias for user " + userId + ":");
-            if (!newAlias || newAlias.trim().length < 3) {
+        function submitEditAlias() {
+            const aliasVal = document.getElementById('dlg-alias-input').value.trim();
+            if (!aliasVal || aliasVal.length < 3) {
                 alert("Alias must be at least 3 characters.");
                 return;
             }
-            payload.alias = newAlias.trim();
-        }
-        
-        try {
-            tg.sendData(JSON.stringify(payload));
-            tg.close();
-        } catch(e) {
-            alert("This feature only works when opening the WebApp via a Reply Keyboard button.");
-        }
-    }
-
-    // ═══ Render Audits ═══
-    function renderAudits(audits) {
-        const el = document.getElementById('list-audits');
-        document.getElementById('cnt-audits').textContent = audits.length;
-
-        if (!audits.length) {
-            showEmpty('list-audits', 'No audits', 'Audit results will appear here');
-            return;
+            closeDialog('dlg-alias-overlay');
+            executeUserAction('edit_alias', activeTargetUserId, { alias: aliasVal });
         }
 
-        const netIcons = {
-            TON: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-            ETH: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.5l-8 11.2L12 17l8-4.3L12 1.5zM4 12.7L12 22.5l8-9.8-8 4.3-8-4.3z"/></svg>`,
-            TRON: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L3 9l3 11 6 2 6-2 3-11-9-7zm0 3l5.5 4.3L12 18 6.5 9.3 12 5z"/></svg>`,
-        };
+        // Delete confirmation handler
+        function submitDeleteUser() {
+            closeDialog('dlg-delete-overlay');
+            executeUserAction('delete_user', activeTargetUserId);
+        }
 
-        el.innerHTML = audits.map((a, i) => {
-            const net = (a.network || '').toUpperCase();
-            const netCls = net.toLowerCase() || 'ton';
-            const icon = netIcons[net] || netIcons.TON;
-            const rl = (a.risk_level || 'LOW').toUpperCase();
-            let rc = 'risk-low';
-            if (rl.includes('CRITICAL')) rc = 'risk-critical';
-            else if (rl.includes('HIGH')) rc = 'risk-high';
-            else if (rl.includes('MEDIUM')) rc = 'risk-medium';
+        function executeUserAction(action, userId, extra = {}) {
+            const payload = { action, user_id: userId, ...extra };
+            try {
+                tg.sendData(JSON.stringify(payload));
+                tg.close();
+            } catch(e) {
+                alert("This action only works inside the Telegram WebApp.");
+            }
+        }
 
-            return `<div class="a-card" style="animation-delay:${i*40}ms">
-                <div class="a-top">
-                    <span class="a-net ${netCls}">${icon} ${net}</span>
-                    <span class="risk ${rc}">${rl}</span>
-                </div>
-                <div class="a-addr">${a.address || '—'}</div>
-                <div class="a-foot">
-                    <span class="a-user"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${a.alias || '?'}</span>
-                    <span class="a-date"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> ${a.created_at || '—'}</span>
-                </div>
-            </div>`;
-        }).join('');
-    }
+        // ═══ User Management actions wrapper ═══
+        function manageUser(action, userId) {
+            if (action === 'edit_alias') {
+                openDialog('dlg-alias-overlay', userId);
+            } else if (action === 'delete_user') {
+                openDialog('dlg-delete-overlay', userId);
+            } else {
+                executeUserAction(action, userId);
+            }
+        }
 
-    // ═══ Render Overview ═══
-    function renderOverview(stats, users, audits) {
-        const el = document.getElementById('overview-content');
-        const total = audits.length || 1;
+        // ═══ Search & Filters ═══
+        function filterUsers(val) {
+            searchQueryUsers = val.toLowerCase().trim();
+            renderUsers();
+        }
 
-        // Network distribution
-        const nets = {};
-        audits.forEach(a => { const n = (a.network||'?').toUpperCase(); nets[n] = (nets[n]||0)+1; });
+        // Search audits filter
+        function filterAudits(val) {
+            searchQueryAudits = val.toLowerCase().trim();
+            renderAudits();
+        }
 
-        // Risk distribution
-        const risks = {LOW:0, MEDIUM:0, HIGH:0, CRITICAL:0};
-        audits.forEach(a => {
-            const r = (a.risk_level||'LOW').toUpperCase();
-            if (r.includes('CRITICAL')) risks.CRITICAL++;
-            else if (r.includes('HIGH')) risks.HIGH++;
-            else if (r.includes('MEDIUM')) risks.MEDIUM++;
-            else risks.LOW++;
-        });
+        function getRiskBadgeClass(level) {
+            if (!level) return 'risk-low';
+            const lvl = level.toUpperCase();
+            if (lvl.includes('CRITICAL')) return 'risk-critical';
+            if (lvl.includes('HIGH')) return 'risk-high';
+            if (lvl.includes('MEDIUM')) return 'risk-medium';
+            return 'risk-low';
+        }
 
-        const topUsers = [...users].sort((a,b) => b.query_count - a.query_count).slice(0,5);
-        const netColors = {TON:'var(--green)', ETH:'var(--blue)', TRON:'var(--red)'};
+        function getNetworkBadgeClass(net) {
+            if (!net) return 'net-ton';
+            const n = net.toUpperCase();
+            if (n.includes('TON')) return 'net-ton';
+            if (n.includes('ETH')) return 'net-eth';
+            if (n.includes('TRON')) return 'net-tron';
+            return 'net-ton';
+        }
 
-        let html = `<div class="sec-head"><span class="sec-title">Network Distribution</span></div>`;
-        Object.entries(nets).forEach(([n, c]) => {
-            const pct = Math.round(c/total*100);
-            const color = netColors[n] || 'var(--purple)';
-            html += `<div class="bar-wrap">
-                <div class="bar-head"><span class="bar-name">${n}</span><span class="bar-val">${c} (${pct}%)</span></div>
-                <div class="bar-track"><div class="bar-fill" style="background:${color};" data-width="${pct}%"></div></div>
-            </div>`;
-        });
-
-        html += `<div class="sec-head" style="margin-top:20px"><span class="sec-title">Risk Distribution</span></div>
-        <div class="risk-grid">
-            <div class="risk-box"><div class="risk-box-val" style="color:var(--green)">${risks.LOW}</div><div class="risk-box-lbl">LOW</div></div>
-            <div class="risk-box"><div class="risk-box-val" style="color:var(--orange)">${risks.MEDIUM}</div><div class="risk-box-lbl">MEDIUM</div></div>
-            <div class="risk-box"><div class="risk-box-val" style="color:var(--red)">${risks.HIGH}</div><div class="risk-box-lbl">HIGH</div></div>
-            <div class="risk-box"><div class="risk-box-val" style="color:#f87171">${risks.CRITICAL}</div><div class="risk-box-lbl">CRITICAL</div></div>
-        </div>`;
-
-        if (topUsers.length) {
-            html += `<div class="sec-head"><span class="sec-title">Top Users</span></div>`;
-            topUsers.forEach((u, i) => {
-                html += `<div class="bar-wrap" style="display:flex;align-items:center;gap:12px;padding:12px 16px;">
-                    <span style="font-size:14px;font-weight:800;color:var(--text-3);width:22px;">#${i+1}</span>
-                    <span style="flex:1;font-size:13px;font-weight:700;">${u.alias}${u.is_admin?' 👑':''}</span>
-                    <span style="font-size:16px;font-weight:800;color:var(--accent);">${u.query_count}</span>
-                </div>`;
+        function copyToClipboard(text, element) {
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = element.innerText;
+                element.innerText = 'Copied!';
+                setTimeout(() => { element.innerText = originalText; }, 1500);
             });
         }
 
-        el.innerHTML = html;
+        // ═══ Data Loader (Hybrid url param + API fallback) ═══
+        async function loadData() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const rawData = params.get('d') || '';
 
-        // Animate bars
-        setTimeout(() => {
-            document.querySelectorAll('.bar-fill[data-width]').forEach(bar => {
-                bar.style.width = bar.dataset.width;
-            });
-        }, 100);
-    }
+                if (rawData) {
+                    // 1. URL parameter decoding flow
+                    function base64urlDecodeToBytes(str) {
+                        str = str.replace(/-/g, '+').replace(/_/g, '/');
+                        while (str.length % 4) str += '=';
+                        const table = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+                        const lookup = {};
+                        for (let i = 0; i < table.length; i++) lookup[table[i]] = i;
+                        const bytes = [];
+                        let buf = 0, bits = 0;
+                        for (let i = 0; i < str.length; i++) {
+                            const c = str[i];
+                            if (c === '=') break;
+                            if (!(c in lookup)) continue;
+                            buf = (buf << 6) | lookup[c];
+                            bits += 6;
+                            if (bits >= 8) {
+                                bits -= 8;
+                                bytes.push((buf >> bits) & 0xFF);
+                            }
+                        }
+                        return new Uint8Array(bytes);
+                    }
 
-    // ═══ Helpers ═══
-    function showEmpty(containerId, title, desc) {
-        document.getElementById(containerId).innerHTML = `
-            <div class="empty">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><circle cx="12" cy="16" r="0.5" fill="currentColor"/></svg>
-                <div class="empty-title">${title}</div>
-                <div class="empty-desc">${desc}</div>
-            </div>`;
-    }
+                    const bytes = base64urlDecodeToBytes(rawData);
+                    const jsonStr = new TextDecoder('utf-8').decode(bytes);
+                    const compact = JSON.parse(jsonStr);
 
-    function filterUsers(q) {
-        const filtered = allUsers.filter(u =>
-            (u.alias||'').toLowerCase().includes(q.toLowerCase()) ||
-            (u.username||'').toLowerCase().includes(q.toLowerCase())
-        );
-        renderUsers(filtered);
-    }
+                    appData = {
+                        stats: compact.s || {},
+                        users: (compact.u || []).map(u => ({
+                            user_id: u.id || 0,
+                            alias: u.a || '',
+                            username: u.u || '',
+                            query_count: u.q || 0,
+                            registered_at: u.d || '',
+                            is_admin: u.ad || 0,
+                            is_approved: u.ap || 0
+                        })),
+                        audits: (compact.a || []).map(a => ({
+                            network: a.n || '',
+                            address: a.addr || '',
+                            risk_level: a.r || 'LOW',
+                            alias: a.al || '',
+                            created_at: a.t || ''
+                        }))
+                    };
+                    renderAll();
+                } else {
+                    // 2. Local API fetch fallback
+                    const base = window.location.origin;
+                    const initData = window.Telegram?.WebApp?.initData || '';
+                    const headers = { 'X-Telegram-Init-Data': initData };
 
-    function filterAudits(q) {
-        const filtered = allAudits.filter(a =>
-            (a.address||'').toLowerCase().includes(q.toLowerCase()) ||
-            (a.network||'').toLowerCase().includes(q.toLowerCase()) ||
-            (a.alias||'').toLowerCase().includes(q.toLowerCase())
-        );
-        renderAudits(filtered);
-    }
+                    const [sr, ur, ar] = await Promise.all([
+                        fetch(base + '/api/stats', { headers }),
+                        fetch(base + '/api/users', { headers }),
+                        fetch(base + '/api/audits', { headers })
+                    ]);
 
-    // ═══ Init ═══
-    setTimeout(loadData, 300); // Small delay for skeleton effect
+                    if (!sr.ok || !ur.ok || !ar.ok) {
+                        throw new Error('Access denied. Admin authorization failed.');
+                    }
+
+                    appData = {
+                        stats: await sr.json(),
+                        users: await ur.json(),
+                        audits: await ar.json()
+                    };
+                    renderAll();
+                }
+            } catch(e) {
+                document.getElementById('stats-skeleton').innerHTML = `
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <div style="font-weight:700; color:var(--error);">Connection Error</div>
+                        <div>${e.message}</div>
+                    </div>`;
+            }
+        }
+
+        function renderAll() {
+            // Hide skeleton, show layout
+            document.getElementById('stats-skeleton').style.display = 'none';
+            document.getElementById('main-content').style.display = 'block';
+
+            // Animate dashboard counts
+            animateNumber('sv-users', appData.stats.total_users || appData.users.length);
+            animateNumber('sv-queries', appData.stats.total_queries || 0);
+            animateNumber('sv-audits', appData.stats.total_audits || appData.audits.length);
+
+            renderUsers();
+            renderAudits();
+        }
+
+        function animateNumber(id, target) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const dur = 800;
+            const start = performance.now();
+            function tick(now) {
+                const p = Math.min((now - start) / dur, 1);
+                const ease = 1 - Math.pow(1 - p, 4);
+                el.textContent = Math.round(target * ease);
+                if (p < 1) requestAnimationFrame(tick);
+            }
+            requestAnimationFrame(tick);
+        }
+
+        // ═══ Render Users List ═══
+        function renderUsers() {
+            const el = document.getElementById('list-users');
+            let users = [...appData.users];
+
+            if (searchQueryUsers) {
+                users = users.filter(u => 
+                    (u.alias && u.alias.toLowerCase().includes(searchQueryUsers)) ||
+                    (u.username && u.username.toLowerCase().includes(searchQueryUsers))
+                );
+            }
+
+            document.getElementById('cnt-users').textContent = users.length;
+
+            if (!users.length) {
+                el.innerHTML = `
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <div>No users found</div>
+                    </div>`;
+                return;
+            }
+
+            el.innerHTML = users.map((u, i) => {
+                const init = (u.alias || '?')[0].toUpperCase();
+                const cls = u.is_admin ? 'admin' : 'user';
+                const crownSvg = u.is_admin ? `<div class="avatar-crown"><svg viewBox="0 0 24 24"><path d="M2 4l3 12h14l3-12-5 4-5-4-5 4z"/></svg></div>` : '';
+                const isAdminStr = u.is_admin ? "Remove Admin" : "Make Admin";
+
+                // Badges
+                let statusBadge = '';
+                if (u.is_admin) {
+                    statusBadge = `<span class="md3-chip chip-admin">Admin</span>`;
+                } else if (!u.is_approved) {
+                    statusBadge = `<span class="md3-chip chip-pending">Pending</span>`;
+                } else {
+                    statusBadge = `<span class="md3-chip chip-approved">Approved</span>`;
+                }
+
+                // Action buttons
+                let approveBtn = '';
+                if (!u.is_admin) {
+                    if (!u.is_approved) {
+                        approveBtn = `<button onclick="manageUser('approve', ${u.user_id})" class="md3-btn md3-btn-success">Approve</button>`;
+                    } else {
+                        approveBtn = `<button onclick="manageUser('disapprove', ${u.user_id})" class="md3-btn md3-btn-error">Block</button>`;
+                    }
+                }
+
+                const adminBtn = `<button onclick="manageUser('toggle_admin', ${u.user_id})" class="md3-btn md3-btn-tonal">${isAdminStr}</button>`;
+                const editBtn = `<button onclick="manageUser('edit_alias', ${u.user_id})" class="md3-btn md3-btn-tonal">Edit</button>`;
+                const deleteBtn = `<button onclick="manageUser('delete_user', ${u.user_id})" class="md3-btn md3-btn-error md3-btn-icon-only">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </button>`;
+
+                return `
+                    <div class="flutter-card" style="animation: slideUpFade 0.4s ${i*30}ms both;">
+                        <div class="card-header-row">
+                            <div class="avatar-circle ${cls}">${init}${crownSvg}</div>
+                            <div class="card-title-block">
+                                <div class="card-name-row">
+                                    <span class="card-title">${u.alias}</span>
+                                    ${statusBadge}
+                                </div>
+                                <div class="card-subtitle">@${u.username || 'noname'} · ${u.registered_at || '—'}</div>
+                            </div>
+                            <div class="card-stat-block">
+                                <div class="card-stat-val">${u.query_count || 0}</div>
+                                <div class="card-stat-lbl">reqs</div>
+                            </div>
+                        </div>
+                        <div class="card-actions-row">
+                            ${approveBtn}
+                            ${adminBtn}
+                            ${editBtn}
+                            ${deleteBtn}
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        // ═══ Render Audits List ═══
+        function renderAudits() {
+            const el = document.getElementById('list-audits');
+            let audits = [...appData.audits];
+
+            if (searchQueryAudits) {
+                audits = audits.filter(a => 
+                    (a.address && a.address.toLowerCase().includes(searchQueryAudits)) ||
+                    (a.alias && a.alias.toLowerCase().includes(searchQueryAudits)) ||
+                    (a.network && a.network.toLowerCase().includes(searchQueryAudits)) ||
+                    (a.risk_level && a.risk_level.toLowerCase().includes(searchQueryAudits))
+                );
+            }
+
+            document.getElementById('cnt-audits').textContent = audits.length;
+
+            if (!audits.length) {
+                el.innerHTML = `
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <div>No audits found</div>
+                    </div>`;
+                return;
+            }
+
+            el.innerHTML = audits.map((a, i) => {
+                const dateStr = a.created_at ? a.created_at.slice(0, 16).replace('T', ' ') : '—';
+                const riskClass = getRiskBadgeClass(a.risk_level);
+                const netClass = getNetworkBadgeClass(a.network);
+                const shortAddress = a.address.length > 20 ? (a.address.slice(0, 14) + '...' + a.address.slice(-10)) : a.address;
+
+                return `
+                    <div class="flutter-card" style="animation: slideUpFade 0.4s ${i*30}ms both;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span class="net-badge ${netClass}">${a.network}</span>
+                            <span class="risk-badge ${riskClass}">${a.risk_level || 'LOW'}</span>
+                        </div>
+                        <div class="address-box">
+                            <span>${shortAddress}</span>
+                            <button class="copy-btn" onclick="copyToClipboard('${a.address}', this)">Copy</button>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-secondary);">
+                            <span>👤 ${a.alias || '?'}</span>
+                            <span>📅 ${dateStr}</span>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        // Init
+        loadData();
     </script>
 </body>
 </html>
