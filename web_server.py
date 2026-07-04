@@ -3,11 +3,17 @@
 import asyncio
 import logging
 import re
+import hmac
+import hashlib
+import urllib.parse
+import json
 from pathlib import Path
+from typing import Optional
 
 from aiohttp import web
 
-from database import get_stats, get_all_users, get_recent_audits
+from config import BOT_TOKEN
+from database import get_stats, get_all_users, get_recent_audits, is_admin
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -49,6 +55,48 @@ async def handle_audits(request: web.Request) -> web.Response:
     return web.json_response(audits)
 
 
+def verify_telegram_init_data(init_data: str) -> Optional[int]:
+    """Verifies Telegram Web App initData and returns user ID if valid."""
+    if not init_data:
+        return None
+    try:
+        parsed = dict(urllib.parse.parse_qsl(init_data))
+        if "hash" not in parsed:
+            return None
+        
+        received_hash = parsed.pop("hash")
+        
+        # Sort and join
+        data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
+        
+        # Secret key is HMAC-SHA256 of bot token with constant string "WebAppData"
+        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+        calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+        
+        if calculated_hash == received_hash:
+            user_data = json.loads(parsed.get("user", "{}"))
+            return user_data.get("id")
+    except Exception as e:
+        logger.warning(f"Init data verification failed: {e}")
+    return None
+
+
+@web.middleware
+async def admin_auth_middleware(request: web.Request, handler):
+    """Middleware to restrict /api/ endpoints to Telegram Admins only."""
+    if request.method == "OPTIONS":
+        return web.Response(status=200)
+
+    if request.path.startswith("/api/"):
+        init_data = request.headers.get("X-Telegram-Init-Data", "")
+        user_id = verify_telegram_init_data(init_data)
+        
+        if not user_id or not is_admin(user_id):
+            return web.json_response({"error": "Unauthorized. Admins only."}, status=403)
+            
+    return await handler(request)
+
+
 def create_web_app() -> web.Application:
     """Web ilovasini yaratish."""
     app: web.Application = web.Application()
@@ -58,12 +106,13 @@ def create_web_app() -> web.Application:
     async def cors_middleware(request: web.Request, handler):
         response = await handler(request)
         response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "X-Telegram-Init-Data, Content-Type, Authorization"
         response.headers["Connection"] = "keep-alive"
         return response
 
     app.middlewares.append(cors_middleware)
+    app.middlewares.append(admin_auth_middleware)
     app.router.add_get("/", handle_index)
     app.router.add_get("/api/stats", handle_stats)
     app.router.add_get("/api/users", handle_users)

@@ -1379,10 +1379,46 @@
         }
 
         // ═══ Data Loader (Hybrid url param + API fallback) ═══
+        async function fetchLiveData(apiBase) {
+            try {
+                const initData = window.Telegram?.WebApp?.initData || '';
+                const headers = { 'X-Telegram-Init-Data': initData };
+
+                const [sr, ur, ar] = await Promise.all([
+                    fetch(apiBase + '/api/stats', { headers }),
+                    fetch(apiBase + '/api/users', { headers }),
+                    fetch(apiBase + '/api/audits', { headers })
+                ]);
+
+                if (sr.ok && ur.ok && ar.ok) {
+                    appData = {
+                        stats: await sr.json(),
+                        users: await ur.json(),
+                        audits: await ar.json()
+                    };
+                    renderAll();
+                    
+                    // Dynamically refresh active profile sheet if open
+                    if (activeTargetUserId && document.getElementById('dlg-profile-overlay').classList.contains('active')) {
+                        const userStillExists = appData.users.some(u => (u.user_id === activeTargetUserId || u.id === activeTargetUserId));
+                        if (userStillExists) {
+                            openProfileSheet(activeTargetUserId);
+                        } else {
+                            closeProfileSheet();
+                        }
+                    }
+                }
+            } catch(e) {
+                console.error("Failed to fetch live updates:", e);
+            }
+        }
+
+        // ═══ Data Loader (Hybrid url param + API fallback) ═══
         async function loadData() {
             try {
                 const params = new URLSearchParams(window.location.search);
                 const rawData = params.get('d') || '';
+                const apiBase = params.get('api') || '';
 
                 if (rawData) {
                     // 1. URL parameter decoding flow
@@ -1401,8 +1437,8 @@
                             buf = (buf << 6) | lookup[c];
                             bits += 6;
                             if (bits >= 8) {
-                                bits -= 8;
-                                bytes.push((buf >> bits) & 0xFF);
+                                  bits -= 8;
+                                  bytes.push((buf >> bits) & 0xFF);
                             }
                         }
                         return new Uint8Array(bytes);
@@ -1432,28 +1468,17 @@
                         }))
                     };
                     renderAll();
-                } else {
-                    // 2. Local API fetch fallback
+                }
+
+                // If API base is available, fetch live data and set interval
+                if (apiBase) {
+                    await fetchLiveData(apiBase);
+                    setInterval(() => fetchLiveData(apiBase), 8000);
+                } else if (!rawData) {
+                    // Fallback to local origin
                     const base = window.location.origin;
-                    const initData = window.Telegram?.WebApp?.initData || '';
-                    const headers = { 'X-Telegram-Init-Data': initData };
-
-                    const [sr, ur, ar] = await Promise.all([
-                        fetch(base + '/api/stats', { headers }),
-                        fetch(base + '/api/users', { headers }),
-                        fetch(base + '/api/audits', { headers })
-                    ]);
-
-                    if (!sr.ok || !ur.ok || !ar.ok) {
-                        throw new Error('Access denied. Admin authorization failed.');
-                    }
-
-                    appData = {
-                        stats: await sr.json(),
-                        users: await ur.json(),
-                        audits: await ar.json()
-                    };
-                    renderAll();
+                    await fetchLiveData(base);
+                    setInterval(() => fetchLiveData(base), 8000);
                 }
             } catch(e) {
                 document.getElementById('stats-skeleton').innerHTML = `

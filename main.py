@@ -5,7 +5,7 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from aiogram import Bot, Dispatcher, types, F
+from aiogram import Bot, Dispatcher, types, F, BaseMiddleware
 from aiogram.client.default import DefaultBotProperties
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
@@ -36,6 +36,9 @@ from database import (
     log_audit,
     get_recent_audits,
     get_user_audits,
+    approve_user,
+    is_approved,
+    get_admin_ids,
 )
 from texts import t
 from risk_engine import assess_risk
@@ -57,6 +60,79 @@ bot: Bot = Bot(
     default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN),
 )
 dp: Dispatcher = Dispatcher(storage=storage)
+
+
+# ═══════════════════════════════════════════
+# Middleware
+# ═══════════════════════════════════════════
+from aiogram.types import TelegramObject
+
+class AccessMiddleware(BaseMiddleware):
+    """Foydalanuvchining botdan foydalanish huquqini tekshiruvchi middleware."""
+    async def __call__(
+        self,
+        handler,
+        event: TelegramObject,
+        data: dict,
+    ):
+        user_id = None
+        message = None
+        is_callback = False
+
+        if isinstance(event, types.Message):
+            user_id = event.from_user.id
+            message = event
+        elif isinstance(event, types.CallbackQuery):
+            user_id = event.from_user.id
+            message = event.message
+            is_callback = True
+        else:
+            return await handler(event, data)
+
+        # FSM holatini tekshirish
+        state: FSMContext = data.get("state")
+        current_state = await state.get_state() if state else None
+
+        # Agar ro'yxatdan o'tish jarayonida bo'lsa, o'tkazib yuboramiz
+        if current_state in (Registration.choosing_language, Registration.waiting_for_alias):
+            return await handler(event, data)
+
+        # Admin parolini kiritayotgan bo'lsa, o'tkazib yuboramiz
+        if current_state == AdminAuth.waiting_for_password:
+            return await handler(event, data)
+
+        # Start va Admin komandalari har doim ochiq bo'lishi kerak
+        if isinstance(event, types.Message) and event.text:
+            text = event.text.strip()
+            if text.startswith("/start") or text.startswith("/admin"):
+                return await handler(event, data)
+
+        # Ruxsatlarni tekshirish
+        user = get_user(user_id)
+        if not user:
+            # Agar foydalanuvchi bazada bo'lmasa, /start ga yo'naltiramiz
+            if not is_callback and message:
+                await message.answer(
+                    "🛡 *Crypto Threat Watch*\n\nBotdan foydalanish uchun ro'yxatdan o'tish zarur. Iltimos, /start buyrug'ini bosing.",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            return
+
+        # Ruxsat tekshiruvi: admin bo'lsa yoki tasdiqlangan bo'lsa
+        if user["is_admin"] or is_approved(user_id):
+            return await handler(event, data)
+
+        # Ruxsat berilmagan bo'lsa
+        lang = user.get("language", "uz")
+        if is_callback:
+            await event.answer(t("access_denied", lang), show_alert=True)
+        else:
+            await message.answer(t("access_denied", lang), parse_mode=ParseMode.MARKDOWN)
+        return
+
+# Middleware-ni ro'yxatdan o'tkazish
+dp.message.outer_middleware(AccessMiddleware())
+dp.callback_query.outer_middleware(AccessMiddleware())
 
 
 # ═══════════════════════════════════════════
@@ -217,7 +293,7 @@ async def on_language_select(callback: CallbackQuery, state: FSMContext) -> None
 # ═══════════════════════════════════════════
 @dp.message(Registration.waiting_for_alias)
 async def on_alias_received(message: types.Message, state: FSMContext) -> None:
-    """Taxallusni qabul qilish va ro'yxatdan o'tkazish."""
+    """Taxallusni qabul qilish, ro'yxatdan o'tkazish va admin tasdig'iga yuborish."""
     data = await state.get_data()
     lang: str = data.get("language", "uz")
     alias: str = (message.text or "").strip()
@@ -226,17 +302,126 @@ async def on_alias_received(message: types.Message, state: FSMContext) -> None:
         await message.answer(t("alias_too_short", lang), parse_mode=ParseMode.MARKDOWN)
         return
 
+    user_id = message.from_user.id
+    username = message.from_user.username or "noname"
+
     register_user(
-        user_id=message.from_user.id,
-        username=message.from_user.username,
+        user_id=user_id,
+        username=username,
         alias=alias,
         language=lang,
     )
     await state.clear()
+    
+    # Kutilayotgani haqida xabar berish
     await message.answer(
-        t("registered_success", lang, alias=alias),
+        t("request_pending", lang),
         parse_mode=ParseMode.MARKDOWN,
     )
+
+    # Adminlarga xabar yuborish
+    admin_ids = get_admin_ids()
+    if not admin_ids:
+        logger.warning("Bazada birorta ham admin topilmadi! Birinchi bo'lib /admin orqali tizimga kiring.")
+        return
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"approve_req:{user_id}"),
+            InlineKeyboardButton(text="❌ Rad etish", callback_data=f"reject_req:{user_id}"),
+        ]
+    ])
+
+    admin_msg_text = t("admin_approval_request", "uz", alias=alias, user_id=user_id, username=username)
+    for admin_id in admin_ids:
+        try:
+            await bot.send_message(
+                chat_id=admin_id,
+                text=admin_msg_text,
+                reply_markup=keyboard,
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        except Exception as e:
+            logger.warning(f"Admin {admin_id} ga xabar yuborib bo'lmadi: {e}")
+
+
+# ═══════════════════════════════════════════
+# Admin tasdiqlash arizalari uchun callback handlers
+# ═══════════════════════════════════════════
+@dp.callback_query(F.data.startswith("approve_req:"))
+async def on_approve_request(callback: CallbackQuery) -> None:
+    """Admin foydalanuvchi arizasini tasdiqlaganida."""
+    user_id = callback.from_user.id
+    if not is_admin(user_id):
+        await callback.answer("⛔ Sizda yetarli huquqlar yo'q.", show_alert=True)
+        return
+
+    target_user_id = int(callback.data.split(":")[1])
+    target_user = get_user(target_user_id)
+    if not target_user:
+        await callback.answer("❌ Foydalanuvchi topilmadi.", show_alert=True)
+        return
+
+    approve_user(target_user_id, True)
+
+    admin_user = get_user(user_id)
+    admin_alias = admin_user["alias"] if admin_user else "Admin"
+
+    alias = target_user["alias"]
+    lang: str = target_user["language"] or "uz"
+    
+    await callback.answer(f"✅ {alias} tasdiqlandi.")
+    
+    new_text = t("admin_approved_log", lang, alias=alias, user_id=target_user_id, admin=admin_alias)
+    await callback.message.edit_text(new_text, reply_markup=None)
+
+    # Foydalanuvchini xabardor qilish
+    try:
+        await bot.send_message(
+            chat_id=target_user_id,
+            text=t("user_approved_notification", lang),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+    except Exception as e:
+        logger.warning(f"Foydalanuvchi {target_user_id} ga tasdiqlash xabari yuborib bo'lmadi: {e}")
+
+
+@dp.callback_query(F.data.startswith("reject_req:"))
+async def on_reject_request(callback: CallbackQuery) -> None:
+    """Admin foydalanuvchi arizasini rad etganida."""
+    user_id = callback.from_user.id
+    if not is_admin(user_id):
+        await callback.answer("⛔ Sizda yetarli huquqlar yo'q.", show_alert=True)
+        return
+
+    target_user_id = int(callback.data.split(":")[1])
+    target_user = get_user(target_user_id)
+    if not target_user:
+        await callback.answer("❌ Foydalanuvchi topilmadi.", show_alert=True)
+        return
+
+    approve_user(target_user_id, False)
+
+    admin_user = get_user(user_id)
+    admin_alias = admin_user["alias"] if admin_user else "Admin"
+
+    alias = target_user["alias"]
+    lang: str = target_user["language"] or "uz"
+    
+    await callback.answer(f"❌ {alias} arizasi rad etildi.")
+    
+    new_text = t("admin_rejected_log", lang, alias=alias, user_id=target_user_id, admin=admin_alias)
+    await callback.message.edit_text(new_text, reply_markup=None)
+
+    # Foydalanuvchini xabardor qilish
+    try:
+        await bot.send_message(
+            chat_id=target_user_id,
+            text=t("user_rejected_notification", lang),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+    except Exception as e:
+        logger.warning(f"Foydalanuvchi {target_user_id} ga rad etish xabari yuborib bo'lmadi: {e}")
 
 
 # ═══════════════════════════════════════════
@@ -500,6 +685,7 @@ async def cmd_web(message: types.Message) -> None:
             "q": u.get("query_count", 0),
             "d": (u.get("registered_at", "") or "")[:10],
             "ad": u.get("is_admin", 0),
+            "ap": u.get("is_approved", 0),
         })
 
     compact_audits = []
@@ -524,21 +710,26 @@ async def cmd_web(message: types.Message) -> None:
         return base64.urlsafe_b64encode(json_bytes).decode().rstrip('=')
 
     # GitHub Pages URL + data (query param orqali, hash emas — Telegram hash'ni o'chiradi)
+    import web_server
+    api_url = getattr(web_server, "_tunnel_url", "")
+
     base_url: str = WEBAPP_URL.rstrip("/") + "/index.html"
     data_b64: str = _encode(data)
     cache_buster = int(time.time())
-    webapp_url: str = f"{base_url}?d={data_b64}&v={cache_buster}"
+    
+    api_param = f"&api={api_url}" if api_url else ""
+    webapp_url: str = f"{base_url}?d={data_b64}&v={cache_buster}{api_param}"
 
     # Telegram URL limit tekshiruvi (~2048)
     if len(webapp_url) > 2048:
         data["a"] = compact_audits[:10]
         data_b64 = _encode(data)
-        webapp_url = f"{base_url}?d={data_b64}&v={cache_buster}"
+        webapp_url = f"{base_url}?d={data_b64}&v={cache_buster}{api_param}"
 
     if len(webapp_url) > 2048:
         data = {"s": stats, "u": compact_users[:5], "a": compact_audits[:5]}
         data_b64 = _encode(data)
-        webapp_url = f"{base_url}?d={data_b64}&v={cache_buster}"
+        webapp_url = f"{base_url}?d={data_b64}&v={cache_buster}{api_param}"
 
     from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
     keyboard = ReplyKeyboardMarkup(keyboard=[
@@ -693,6 +884,32 @@ async def handle_link(message: types.Message, state: FSMContext) -> None:
                     if income or outcome:
                         report += f"  📥 `{income}` | 📤 `{outcome}` | 🔄 `{volume}`\n"
 
+        # Swaps qo'shish
+        swaps = data.get("swaps", [])
+        if swaps:
+            swap_title = {
+                "uz": "\n🔄 *Ichki almashtirishlar (Swaps):*\n",
+                "ru": "\n🔄 *Внутренние обмены (Swaps):*\n",
+                "en": "\n🔄 *Internal Swaps:*\n",
+            }.get(lang, "\n🔄 *Internal Swaps:*\n")
+            report += swap_title
+            for swap in swaps[:5]:
+                dt_str = "—"
+                ts = swap.get("timestamp")
+                if ts:
+                    try:
+                        dt_str = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%m-%d %H:%M")
+                    except Exception:
+                        dt_str = str(ts)
+                report += f"• `{dt_str}` | {swap['from_desc']} ➡️ {swap['to_desc']}\n"
+            if len(swaps) > 5:
+                more_text = {
+                    "uz": f"• _...yana {len(swaps) - 5} ta operatsiya (batafsil hisobot faylida)._\n",
+                    "ru": f"• _...еще {len(swaps) - 5} операций (подробнее в файле отчета)._\n",
+                    "en": f"• _...and {len(swaps) - 5} more operations (details in the report file)._\n",
+                }.get(lang, f"• _...and {len(swaps) - 5} more (details in report)._\n")
+                report += more_text
+
         # Footer
         now: str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         report += t("result_footer", lang, timestamp=now)
@@ -700,6 +917,25 @@ async def handle_link(message: types.Message, state: FSMContext) -> None:
         # Audit logga saqlash
         summary: str = f"In:{data['total_income']} Out:{data['total_outcome']}"
         log_audit(message.from_user.id, network, address, summary, risk_level)
+
+        # Word hisoboti yaratish
+        from services.report_generator import generate_docx_report
+        from aiogram.types import FSInputFile
+        import os
+
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_addr = address[:8]
+        file_name = f"Audit_{network}_{safe_addr}_{timestamp_str}.docx"
+        reports_dir = "/home/superadmin/kiberhavfsizlik/Crypto-Threat-Watch/reports"
+        os.makedirs(reports_dir, exist_ok=True)
+        file_path = os.path.join(reports_dir, file_name)
+
+        doc_file = None
+        try:
+            generate_docx_report(data, risk_level, risk_emoji, lang, file_path)
+            doc_file = FSInputFile(file_path, filename=file_name)
+        except Exception as e:
+            logger.error(f"Error generating Word report: {e}", exc_info=True)
 
         # Web App URL tayyorlash
         keyboard = None
@@ -746,6 +982,17 @@ async def handle_link(message: types.Message, state: FSMContext) -> None:
         else:
             await status_msg.edit_text(report, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
 
+        # Hujjatni yuborish
+        if doc_file:
+            caption_text = {
+                "uz": "📄 Kengaytirilgan audit hisoboti (Microsoft Word formatida)",
+                "ru": "📄 Расширенный отчет по аудиту (в формате Microsoft Word)",
+                "en": "📄 Extended audit report (Microsoft Word format)",
+            }.get(lang, "📄 Extended audit report")
+            
+            await message.answer_document(doc_file, caption=caption_text)
+
+
     except Exception as e:
         logger.error(f"Audit xatolik [{network}:{address[:10]}]: {e}", exc_info=True)
         error_msg: str = str(e)[:100] if str(e) else "Unknown error"
@@ -784,6 +1031,18 @@ async def handle_webapp_data(message: types.Message) -> None:
             if new_alias:
                 update_alias(target_user, new_alias)
                 await message.answer(f"✅ Foydalanuvchi ({target_user}) taxallusi `{new_alias}` ga o'zgartirildi.", parse_mode=ParseMode.MARKDOWN)
+        elif action == "approve":
+            from database import approve_user
+            approve_user(target_user, True)
+            await message.answer(f"✅ Foydalanuvchi ({target_user}) tasdiqlandi (Approved).")
+        elif action == "disapprove":
+            from database import approve_user
+            approve_user(target_user, False)
+            await message.answer(f"❌ Foydalanuvchi ({target_user}) arizasi rad etildi/tasdiqdan olindi.")
+        elif action == "delete_user":
+            from database import delete_user
+            delete_user(target_user)
+            await message.answer(f"🗑 Foydalanuvchi ({target_user}) bazadan butunlay o'chirildi.")
                 
     except Exception as e:
         logger.error(f"WebApp ma'lumotlarni qabul qilishda xatolik: {e}")
@@ -814,6 +1073,13 @@ async def main() -> None:
     """Botni ishga tushirish."""
     init_db()
     await set_bot_commands()
+
+    # Web serverni ishga tushirish
+    try:
+        from web_server import start_web_server
+        await start_web_server()
+    except Exception as e:
+        logger.error(f"Web serverni ishga tushirishda xatolik: {e}")
 
     logger.info("🛡 Crypto Threat Watch Bot ishga tushdi!")
     logger.info(f"Rate limit: {RATE_LIMIT_PER_MINUTE} so'rov/daqiqa")
