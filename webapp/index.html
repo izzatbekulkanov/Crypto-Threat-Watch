@@ -829,6 +829,127 @@
         .safe-bottom-space {
             height: env(safe-area-inset-bottom, 20px);
         }
+
+        /* Profile Bottom Sheet Styles */
+        .profile-sheet-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 500;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: flex;
+            align-items: flex-end;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .profile-sheet-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .profile-sheet {
+            width: 100%;
+            max-width: 480px;
+            margin: 0 auto;
+            background: #151522;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-bottom: none;
+            border-radius: 28px 28px 0 0;
+            padding: 16px 20px 30px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6);
+        }
+
+        .profile-sheet-overlay.active .profile-sheet {
+            transform: translateY(0);
+        }
+
+        .sheet-handle {
+            width: 36px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 2px;
+            margin: 0 auto 8px;
+            flex-shrink: 0;
+        }
+
+        .sheet-body {
+            overflow-y: auto;
+            flex: 1;
+            padding-right: 4px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .profile-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 12px;
+        }
+
+        .profile-avatar-large {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            font-weight: 800;
+            color: #FFFFFF;
+            position: relative;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        .profile-avatar-large.admin {
+            background: linear-gradient(135deg, #FF9100, #F50057);
+            border: 2px solid #FF9100;
+        }
+
+        .profile-avatar-large.user {
+            background: linear-gradient(135deg, var(--primary), #3b82f6);
+            border: 2px solid var(--primary);
+        }
+
+        .profile-name {
+            font-size: 18px;
+            font-weight: 800;
+            color: #FFFFFF;
+        }
+
+        .profile-subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: -8px;
+        }
+
+        .profile-section-title {
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 6px;
+        }
+
+        .profile-audits-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
     </style>
 </head>
 <body>
@@ -1005,6 +1126,47 @@
         </div>
     </div>
 
+    <!-- User Profile Bottom Sheet -->
+    <div id="dlg-profile-overlay" class="profile-sheet-overlay" onclick="if(event.target===this) closeProfileSheet()">
+        <div class="profile-sheet">
+            <div class="sheet-handle"></div>
+            <div class="sheet-body">
+                <div class="profile-header">
+                    <div id="profile-avatar" class="profile-avatar-large">?</div>
+                    <div id="profile-name" class="profile-name">?</div>
+                    <div id="profile-subtitle" class="profile-subtitle">@noname · ID: ?</div>
+                    <div id="profile-badges" style="display:flex; gap:6px; justify-content:center; margin-top:2px;"></div>
+                </div>
+                
+                <div>
+                    <div class="profile-section-title">User Information</div>
+                    <div class="flutter-card" style="padding:14px; gap:8px;">
+                        <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-secondary);">
+                            <span>Registered on</span>
+                            <span id="profile-reg-date" style="font-weight:700; color:var(--text-primary);">—</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-secondary);">
+                            <span>Total Wallet Audits</span>
+                            <span id="profile-query-count" style="font-family:'Space Grotesk',sans-serif; font-weight:700; color:var(--primary);">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="profile-section-title">Search & Audit History</div>
+                    <div id="profile-audits" class="profile-audits-list">
+                        <!-- User's search logs populated here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Actions row inside profile details -->
+            <div class="card-actions-row" id="profile-actions" style="margin-top:auto; padding-top:16px;">
+                <!-- Filled dynamically -->
+            </div>
+        </div>
+    </div>
+
     <script>
         const tg = window.Telegram.WebApp;
         tg.ready();
@@ -1050,6 +1212,96 @@
 
         function closeDialog(overlayId) {
             document.getElementById(overlayId).classList.remove('active');
+            activeTargetUserId = null;
+        }
+
+        function openProfileSheet(userId) {
+            const user = appData.users.find(u => (u.user_id === userId || u.id === userId));
+            if (!user) return;
+
+            activeTargetUserId = userId;
+
+            // Set Avatar
+            const init = (user.alias || '?')[0].toUpperCase();
+            const avatarEl = document.getElementById('profile-avatar');
+            avatarEl.className = 'profile-avatar-large ' + (user.is_admin ? 'admin' : 'user');
+            avatarEl.innerText = init;
+
+            // Set Name/Info
+            document.getElementById('profile-name').innerText = user.alias;
+            document.getElementById('profile-subtitle').innerText = `@${user.username || 'noname'} · ID: ${userId}`;
+            document.getElementById('profile-reg-date').innerText = user.registered_at || '—';
+            document.getElementById('profile-query-count').innerText = user.query_count || 0;
+
+            // Set Badges
+            let badgesHtml = '';
+            if (user.is_admin) {
+                badgesHtml = `<span class="md3-chip chip-admin">Admin</span>`;
+            } else if (!user.is_approved) {
+                badgesHtml = `<span class="md3-chip chip-pending">Pending</span>`;
+            } else {
+                badgesHtml = `<span class="md3-chip chip-approved">Approved</span>`;
+            }
+            document.getElementById('profile-badges').innerHTML = badgesHtml;
+
+            // Populate Audits List for this user
+            const userAudits = appData.audits.filter(a => a.alias === user.alias);
+            const auditsContainer = document.getElementById('profile-audits');
+            
+            if (!userAudits.length) {
+                auditsContainer.innerHTML = `
+                    <div class="empty-state" style="padding: 20px; font-size: 11px; border-radius: 12px;">
+                        <div>No wallet audits found for this user</div>
+                    </div>`;
+            } else {
+                auditsContainer.innerHTML = userAudits.map(a => {
+                    const dateStr = a.created_at ? a.created_at.slice(0, 16).replace('T', ' ') : '—';
+                    const riskClass = getRiskBadgeClass(a.risk_level);
+                    const netClass = getNetworkBadgeClass(a.network);
+                    const shortAddress = a.address.length > 20 ? (a.address.slice(0, 12) + '...' + a.address.slice(-8)) : a.address;
+                    return `
+                        <div class="flutter-card" style="padding:10px; gap:8px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span class="net-badge ${netClass}" style="font-size:8px; padding:1px 6px;">${a.network}</span>
+                                <span class="risk-badge ${riskClass}" style="font-size:8px; padding:1px 6px;">${a.risk_level}</span>
+                            </div>
+                            <div class="address-box" style="font-size:10px; padding:4px 8px;">
+                                <span>${shortAddress}</span>
+                                <button class="copy-btn" onclick="copyToClipboard('${a.address}', this)" style="font-size:9px;">Copy</button>
+                            </div>
+                            <div style="font-size:9px; text-align:right; color:var(--text-muted);">${dateStr}</div>
+                        </div>`;
+                }).join('');
+            }
+
+            // Populate Actions
+            let approveBtn = '';
+            if (!user.is_admin) {
+                if (!user.is_approved) {
+                    approveBtn = `<button onclick="event.stopPropagation(); manageUser('approve', ${userId})" class="md3-btn md3-btn-success">Approve Access</button>`;
+                } else {
+                    approveBtn = `<button onclick="event.stopPropagation(); manageUser('disapprove', ${userId})" class="md3-btn md3-btn-error">Block Access</button>`;
+                }
+            }
+            const isAdminStr = user.is_admin ? "Remove Admin" : "Make Admin";
+            const adminBtn = `<button onclick="event.stopPropagation(); manageUser('toggle_admin', ${userId})" class="md3-btn md3-btn-tonal">${isAdminStr}</button>`;
+            const editBtn = `<button onclick="event.stopPropagation(); manageUser('edit_alias', ${userId})" class="md3-btn md3-btn-tonal">Edit Alias</button>`;
+            const deleteBtn = `<button onclick="event.stopPropagation(); manageUser('delete_user', ${userId})" class="md3-btn md3-btn-error md3-btn-icon-only">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            </button>`;
+
+            document.getElementById('profile-actions').innerHTML = `
+                ${approveBtn}
+                ${adminBtn}
+                ${editBtn}
+                ${deleteBtn}
+            `;
+
+            document.getElementById('dlg-profile-overlay').classList.add('active');
+        }
+
+        function closeProfileSheet() {
+            document.getElementById('dlg-profile-overlay').classList.remove('active');
             activeTargetUserId = null;
         }
 
@@ -1284,20 +1536,20 @@
                 let approveBtn = '';
                 if (!u.is_admin) {
                     if (!u.is_approved) {
-                        approveBtn = `<button onclick="manageUser('approve', ${u.user_id})" class="md3-btn md3-btn-success">Approve</button>`;
+                        approveBtn = `<button onclick="event.stopPropagation(); manageUser('approve', ${u.user_id})" class="md3-btn md3-btn-success">Approve</button>`;
                     } else {
-                        approveBtn = `<button onclick="manageUser('disapprove', ${u.user_id})" class="md3-btn md3-btn-error">Block</button>`;
+                        approveBtn = `<button onclick="event.stopPropagation(); manageUser('disapprove', ${u.user_id})" class="md3-btn md3-btn-error">Block</button>`;
                     }
                 }
 
-                const adminBtn = `<button onclick="manageUser('toggle_admin', ${u.user_id})" class="md3-btn md3-btn-tonal">${isAdminStr}</button>`;
-                const editBtn = `<button onclick="manageUser('edit_alias', ${u.user_id})" class="md3-btn md3-btn-tonal">Edit</button>`;
-                const deleteBtn = `<button onclick="manageUser('delete_user', ${u.user_id})" class="md3-btn md3-btn-error md3-btn-icon-only">
+                const adminBtn = `<button onclick="event.stopPropagation(); manageUser('toggle_admin', ${u.user_id})" class="md3-btn md3-btn-tonal">${isAdminStr}</button>`;
+                const editBtn = `<button onclick="event.stopPropagation(); manageUser('edit_alias', ${u.user_id})" class="md3-btn md3-btn-tonal">Edit</button>`;
+                const deleteBtn = `<button onclick="event.stopPropagation(); manageUser('delete_user', ${u.user_id})" class="md3-btn md3-btn-error md3-btn-icon-only">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                 </button>`;
 
                 return `
-                    <div class="flutter-card" style="animation: slideUpFade 0.4s ${i*30}ms both;">
+                    <div class="flutter-card" onclick="openProfileSheet(${u.user_id})" style="animation: slideUpFade 0.4s ${i*30}ms both; cursor: pointer;">
                         <div class="card-header-row">
                             <div class="avatar-circle ${cls}">${init}${crownSvg}</div>
                             <div class="card-title-block">
