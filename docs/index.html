@@ -1184,6 +1184,7 @@
 
         // Dialog states
         let activeTargetUserId = null;
+        let isFirstLoad = true;
 
         // ═══ Navigation Tabs (Bottom Bar) ═══
         document.querySelectorAll('.nav-item').forEach(item => {
@@ -1311,14 +1312,75 @@
                 alert("Alias must be at least 3 characters.");
                 return;
             }
+            const targetId = activeTargetUserId;
             closeDialog('dlg-alias-overlay');
-            executeUserAction('edit_alias', activeTargetUserId, { alias: aliasVal });
+            executeUserAction('edit_alias', targetId, { alias: aliasVal });
         }
 
         // Delete confirmation handler
         function submitDeleteUser() {
+            const targetId = activeTargetUserId;
             closeDialog('dlg-delete-overlay');
-            executeUserAction('delete_user', activeTargetUserId);
+            executeUserAction('delete_user', targetId);
+        }
+
+        function showToast(message, type = 'success') {
+            let container = document.getElementById('toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container';
+                container.style.position = 'fixed';
+                container.style.bottom = '96px';
+                container.style.left = '50%';
+                container.style.transform = 'translateX(-50%)';
+                container.style.zIndex = '2000';
+                container.style.display = 'flex';
+                container.style.flexDirection = 'column';
+                container.style.gap = '8px';
+                container.style.width = 'calc(100% - 48px)';
+                container.style.maxWidth = '360px';
+                container.style.pointerEvents = 'none';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            toast.style.background = 'rgba(30, 30, 45, 0.95)';
+            toast.style.backdropFilter = 'blur(10px)';
+            toast.style.webkitBackdropFilter = 'blur(10px)';
+            toast.style.border = '1px solid ' + (type === 'error' ? 'rgba(255, 84, 73, 0.2)' : 'rgba(0, 229, 160, 0.2)');
+            toast.style.color = '#FFFFFF';
+            toast.style.padding = '12px 16px';
+            toast.style.borderRadius = '16px';
+            toast.style.fontSize = '12px';
+            toast.style.fontWeight = '700';
+            toast.style.display = 'flex';
+            toast.style.alignItems = 'center';
+            toast.style.gap = '8px';
+            toast.style.boxShadow = '0 8px 24px rgba(0,0,0,0.5)';
+            toast.style.transform = 'translateY(20px)';
+            toast.style.opacity = '0';
+            toast.style.transition = 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+
+            let icon = '';
+            if (type === 'error') {
+                icon = `<svg viewBox="0 0 24 24" fill="none" stroke="#FF5449" stroke-width="2.5" style="width:16px;height:16px;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+            } else {
+                icon = `<svg viewBox="0 0 24 24" fill="none" stroke="#00E5A0" stroke-width="2.5" style="width:16px;height:16px;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>`;
+            }
+
+            toast.innerHTML = `${icon}<span style="flex:1;">${message}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.transform = 'translateY(0)';
+                toast.style.opacity = '1';
+            }, 10);
+
+            setTimeout(() => {
+                toast.style.transform = 'translateY(-20px)';
+                toast.style.opacity = '0';
+                setTimeout(() => { toast.remove(); }, 300);
+            }, 3000);
         }
 
         async function executeUserAction(action, userId, extra = {}) {
@@ -1339,11 +1401,17 @@
                 });
 
                 if (response.ok) {
+                    const actionName = action === 'toggle_admin' ? 'Admin status updated' :
+                                       action === 'edit_alias' ? 'Alias updated' :
+                                       action === 'approve' ? 'User approved' :
+                                       action === 'disapprove' ? 'User blocked' :
+                                       action === 'delete_user' ? 'User deleted' : 'Action successful';
+                    showToast(actionName);
                     // Refresh data live
                     await fetchLiveData(apiBase);
                 } else {
                     const errData = await response.json().catch(() => ({}));
-                    alert("Error: " + (errData.error || "Action failed."));
+                    showToast(errData.error || "Action failed.", "error");
                 }
             } catch(e) {
                 console.warn("API action failed, falling back to Telegram sendData:", e);
@@ -1351,7 +1419,7 @@
                     tg.sendData(JSON.stringify(payload));
                     tg.close();
                 } catch(tgError) {
-                    alert("Action failed: " + e.message);
+                    showToast(e.message, "error");
                 }
             }
         }
@@ -1529,6 +1597,8 @@
 
             renderUsers();
             renderAudits();
+            
+            isFirstLoad = false;
         }
 
         function animateNumber(id, target) {
@@ -1600,8 +1670,9 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                 </button>`;
 
+                const animStyle = isFirstLoad ? `animation: slideUpFade 0.4s ${i*30}ms both;` : '';
                 return `
-                    <div class="flutter-card" onclick="openProfileSheet(${u.user_id})" style="animation: slideUpFade 0.4s ${i*30}ms both; cursor: pointer;">
+                    <div class="flutter-card" onclick="openProfileSheet(${u.user_id})" style="${animStyle} cursor: pointer;">
                         <div class="card-header-row">
                             <div class="avatar-circle ${cls}">${init}${crownSvg}</div>
                             <div class="card-title-block">
@@ -1657,8 +1728,9 @@
                 const netClass = getNetworkBadgeClass(a.network);
                 const shortAddress = a.address.length > 20 ? (a.address.slice(0, 14) + '...' + a.address.slice(-10)) : a.address;
 
+                const animStyle = isFirstLoad ? `animation: slideUpFade 0.4s ${i*30}ms both;` : '';
                 return `
-                    <div class="flutter-card" style="animation: slideUpFade 0.4s ${i*30}ms both;">
+                    <div class="flutter-card" style="${animStyle}">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <span class="net-badge ${netClass}">${a.network}</span>
                             <span class="risk-badge ${riskClass}">${a.risk_level || 'LOW'}</span>
