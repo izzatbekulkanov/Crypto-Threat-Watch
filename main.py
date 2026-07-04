@@ -731,13 +731,13 @@ async def cmd_web(message: types.Message) -> None:
         data_b64 = _encode(data)
         webapp_url = f"{base_url}?d={data_b64}&v={cache_buster}{api_param}"
 
-    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-    keyboard = ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
             text="🖥 Admin Panel ochish",
             web_app=WebAppInfo(url=webapp_url),
         )]
-    ], resize_keyboard=True)
+    ])
 
     await message.answer(
         "🌐 *Crypto Threat Watch — Admin Panel*\n\n"
