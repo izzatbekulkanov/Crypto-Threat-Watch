@@ -646,6 +646,11 @@ async def cmd_audits(message: types.Message) -> None:
 @dp.message(Command("web"))
 async def cmd_web(message: types.Message) -> None:
     """Admin panel — Telegram Mini App ochish (GitHub Pages)."""
+    # Clear any old persistent reply keyboards
+    from aiogram.types import ReplyKeyboardRemove
+    clear_msg = await message.answer("🔄", reply_markup=ReplyKeyboardRemove())
+    await clear_msg.delete()
+
     user = get_user(message.from_user.id)
     if not user:
         await message.answer(t("not_registered", "uz"), parse_mode=ParseMode.MARKDOWN)
