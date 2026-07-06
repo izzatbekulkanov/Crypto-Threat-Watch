@@ -222,17 +222,27 @@ def generate_docx_report(
 
     doc = docx.Document()
 
-    # Sahifa chetlarini sozlash (1 inch)
+    # Sahifa: Landscape (gorizontal), kichik chegaralar
+    from docx.oxml.ns import qn as _qn
+    from docx.oxml import OxmlElement as _OE
+    from docx.shared import Mm
     for section in doc.sections:
-        section.top_margin = Inches(1.0)
-        section.bottom_margin = Inches(1.0)
-        section.left_margin = Inches(1.0)
-        section.right_margin = Inches(1.0)
+        # Landscape: kenglik > balandlik
+        section.page_width  = Mm(297)   # A4 eni
+        section.page_height = Mm(210)   # A4 bo'yi
+        section.top_margin    = Inches(0.5)
+        section.bottom_margin = Inches(0.5)
+        section.left_margin   = Inches(0.6)
+        section.right_margin  = Inches(0.6)
+        # orientation XML
+        pgSz = section._sectPr.xpath("./w:pgSz", namespaces={"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"})
+        if pgSz:
+            pgSz[0].set("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}orient", "landscape")
 
-    # Standart stil
+    # Standart stil — kichik shrift
     style = doc.styles['Normal']
     style.font.name = 'Arial'
-    style.font.size = Pt(10.5)
+    style.font.size = Pt(9)
     style.font.color.rgb = COLOR_TEXT
 
     # 1. HEADER (Sarlavha)
@@ -515,13 +525,14 @@ def generate_docx_report(
             hdr_txs[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
             run = hdr_txs[i].paragraphs[0].add_run(title)
             run.bold = True
+            run.font.size = Pt(7.5)
             run.font.color.rgb = COLOR_WHITE
             _set_cell_background(hdr_txs[i], "1F4E79")
-            _set_cell_margins(hdr_txs[i], top=100, bottom=100, left=80, right=80)
+            _set_cell_margins(hdr_txs[i], top=70, bottom=70, left=60, right=60)
 
-        # Sahifa kengligi ~6.5 dyum. Ustun kengliklari:
-        # №: 0.4 in, Vaqt: 1.1 in, Turi: 0.6 in, Hamkor: 2.5 in, Miqdor: 1.1 in, Valyuta: 0.8 in
-        col_widths = [Inches(0.4), Inches(1.1), Inches(0.6), Inches(2.5), Inches(1.1), Inches(0.8)]
+        # Sahifa kengligi ~9 dyum (landscape). Ustun kengliklari:
+        # №: 0.3in, Vaqt: 1.1in, Turi: 0.55in, Hamkor(manzil): 3.6in, Miqdor: 1.0in, Aktiv: 0.7in
+        col_widths = [Inches(0.3), Inches(1.1), Inches(0.55), Inches(3.6), Inches(1.0), Inches(0.7)]
 
         for row_idx, tx in enumerate(sorted_txs, 1):
             row_cells = txs_table.rows[row_idx].cells
@@ -539,31 +550,33 @@ def generate_docx_report(
             dir_str = "📥 IN" if direction == "IN" else "📤 OUT"
 
             counterparty = tx.get("counterparty", "—")
-            short_cp = counterparty
-            if len(counterparty) > 28:
-                short_cp = f"{counterparty[:12]}...{counterparty[-12:]}"
 
-            amount_str = f"{tx.get('amount', 0.0):,.4f}"
+            amount_str = f"{tx.get('amount', 0.0):,.6f}"
             asset_str = tx.get("symbol", "?")
 
-            vals = [str(row_idx), dt_str, dir_str, short_cp, amount_str, asset_str]
+            vals = [str(row_idx), dt_str, dir_str, counterparty, amount_str, asset_str]
 
             for col_idx, val in enumerate(vals):
                 cell = row_cells[col_idx]
                 p = cell.paragraphs[0]
                 run = p.add_run(val)
+                run.font.size = Pt(7)   # Kichik shrift — ko'proq ma'lumot sig'adi
                 _set_cell_background(cell, bg_color)
-                _set_cell_margins(cell, top=80, bottom=80, left=60, right=60)
-                
-                # Tekislash (Alignment)
-                if col_idx == 0:
+                _set_cell_margins(cell, top=50, bottom=50, left=50, right=50)
+
+                # Hamyon manzili uchun monospace shrift
+                if col_idx == 3:
+                    run.font.name = "Courier New"
+                    run.font.size = Pt(6.5)
+                    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                elif col_idx == 0:
                     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 elif col_idx == 2:
                     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     if direction == "IN":
-                        run.font.color.rgb = RGBColor(46, 204, 113) # Green
+                        run.font.color.rgb = RGBColor(46, 204, 113)  # Green
                     else:
-                        run.font.color.rgb = RGBColor(231, 76, 60) # Red
+                        run.font.color.rgb = RGBColor(231, 76, 60)   # Red
                 elif col_idx == 4:
                     p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
                 elif col_idx == 5:
