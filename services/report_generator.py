@@ -222,22 +222,16 @@ def generate_docx_report(
 
     doc = docx.Document()
 
-    # Sahifa: Landscape (gorizontal), kichik chegaralar
-    from docx.oxml.ns import qn as _qn
-    from docx.oxml import OxmlElement as _OE
     from docx.shared import Mm
+    from docx.enum.section import WD_ORIENT
     for section in doc.sections:
-        # Landscape: kenglik > balandlik
+        section.orientation = WD_ORIENT.LANDSCAPE
         section.page_width  = Mm(297)   # A4 eni
         section.page_height = Mm(210)   # A4 bo'yi
         section.top_margin    = Inches(0.5)
         section.bottom_margin = Inches(0.5)
         section.left_margin   = Inches(0.6)
         section.right_margin  = Inches(0.6)
-        # orientation XML
-        pgSz = section._sectPr.xpath("./w:pgSz", namespaces={"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"})
-        if pgSz:
-            pgSz[0].set("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}orient", "landscape")
 
     # Standart stil — kichik shrift
     style = doc.styles['Normal']
