@@ -1,10 +1,4 @@
-"""TON tarmog'i — Professional audit xizmati (tonapi.io + toncenter.com).
-
-Tezlik optimizatsiyasi:
-- TON tranzaksiyalari va Jetton tarixi PARALLEL yuklanadi (asyncio.gather)
-- Jetton tarixi BIR endpoint orqali olinadi (per-token emas, bulk)
-- Sleep delay 0.5s -> 0.1s (API key bilan 10 RPS limit)
-"""
+"""TON tarmog'i — Professional audit xizmati (tonapi.io + toncenter.com)."""
 
 import httpx
 import logging
@@ -29,22 +23,63 @@ async def _noop_progress(*args, **kwargs) -> None:
     return None
 
 
+def raw_to_friendly(raw_addr: str, bounceable: bool = False) -> str:
+    """TON raw manzilini (0:hex) user-friendly (UQ.../EQ...) formatga o'girish.
+    
+    Agar allaqachon UQ/EQ bilan boshlangan bo'lsa, o'zgartirishsiz qaytaradi.
+    """
+    import base64
+    import struct
+
+    if not raw_addr:
+        return raw_addr
+
+    # Allaqachon user-friendly formatda bo'lsa
+    if not raw_addr.startswith("0:") and not raw_addr.startswith("-1:"):
+        return raw_addr
+
+    try:
+        parts = raw_addr.split(":")
+        workchain = int(parts[0])  # 0 yoki -1
+        hex_part = parts[1].zfill(64)  # 32 byte
+        addr_bytes = bytes.fromhex(hex_part)
+
+        # Tag: bounceable=0x11, non-bounceable=0x51; testnet ga -1 qo'shiladi
+        tag = 0x11 if bounceable else 0x51
+        wc_byte = workchain & 0xFF
+
+        # 34 bayt: tag + workchain + 32 bayt addr
+        data = bytes([tag, wc_byte]) + addr_bytes
+
+        # CRC16-CCITT (XModem)
+        crc = 0
+        for byte in data:
+            crc ^= byte << 8
+            for _ in range(8):
+                if crc & 0x8000:
+                    crc = (crc << 1) ^ 0x1021
+                else:
+                    crc <<= 1
+            crc &= 0xFFFF
+
+        full = data + struct.pack(">H", crc)
+        return base64.urlsafe_b64encode(full).decode().rstrip("=")
+    except Exception:
+        return raw_addr  # fallback: o'zgartirmay qaytarish
+
+
 async def _fetch_native_txs(
     client: httpx.AsyncClient,
     address: str,
     raw_address: str,
     cb: ProgressCb,
-) -> tuple[int, int, int, dict[str, dict[str, float]]]:
+) -> list[dict]:
     """TON (native) tranzaksiyalarini yuklab oladi.
 
     Returns:
-        (total_in_nano, total_out_nano, tx_count, yearly_stats)
+        list[dict]: List of transfer dicts.
     """
-    total_in: int = 0
-    total_out: int = 0
-    tx_count: int = 0
-    yearly_stats: dict[str, dict[str, float]] = {}
-
+    transfers: list[dict] = []
     before_lt = None
     page_idx = 0
 
@@ -65,28 +100,29 @@ async def _fetch_native_txs(
         if not transactions:
             break
 
-        tx_count += len(transactions)
         page_idx += 1
-        # 25% -> 60% oraliq native TX uchun
+        # Progress uchun taxminiy hisob
         pct = min(60, 25 + page_idx * 4)
-        await cb("progress_txns", pct, count=tx_count)
+        await cb("progress_txns", pct, count=len(transfers))
 
         for tx in transactions:
             tx_time = tx.get("utime", 0)
-            year = "Unknown"
-            if tx_time:
-                year = str(datetime.fromtimestamp(tx_time, tz=timezone.utc).year)
-            if year not in yearly_stats:
-                yearly_stats[year] = {"in": 0.0, "out": 0.0}
+            tx_hash = tx.get("hash", "")
 
             in_msg: dict | None = tx.get("in_msg")
             if in_msg and in_msg.get("value"):
                 src = in_msg.get("source") or {}
                 src_addr = src.get("address", "").lower() if isinstance(src, dict) else ""
                 if src_addr != raw_address:
-                    val = int(in_msg["value"])
-                    total_in += val
-                    yearly_stats[year]["in"] += val / _NANOTON_DIVISOR
+                    val = int(in_msg["value"]) / _NANOTON_DIVISOR
+                    transfers.append({
+                        "tx_hash": tx_hash,
+                        "timestamp": tx_time,
+                        "symbol": "GRAM",
+                        "amount": val,
+                        "direction": "in",
+                        "counterparty": raw_to_friendly(src_addr)
+                    })
 
             out_msgs: list[dict] = tx.get("out_msgs", [])
             for msg in out_msgs:
@@ -94,9 +130,15 @@ async def _fetch_native_txs(
                     dest = msg.get("destination") or {}
                     dest_addr = dest.get("address", "").lower() if isinstance(dest, dict) else ""
                     if dest_addr != raw_address:
-                        val = int(msg["value"])
-                        total_out += val
-                        yearly_stats[year]["out"] += val / _NANOTON_DIVISOR
+                        val = int(msg["value"]) / _NANOTON_DIVISOR
+                        transfers.append({
+                            "tx_hash": tx_hash,
+                            "timestamp": tx_time,
+                            "symbol": "GRAM",
+                            "amount": val,
+                            "direction": "out",
+                            "counterparty": raw_to_friendly(dest_addr)
+                        })
 
         last_lt = transactions[-1].get("lt")
         if not last_lt:
@@ -104,7 +146,7 @@ async def _fetch_native_txs(
         before_lt = last_lt
         await asyncio.sleep(0.1)
 
-    return total_in, total_out, tx_count, yearly_stats
+    return transfers
 
 
 async def _fetch_one_jetton_history(
@@ -113,15 +155,11 @@ async def _fetch_one_jetton_history(
     raw_address: str,
     jetton_address: str,
     symbol: str,
-) -> tuple[str, dict]:
-    """BIR jetton uchun transfer tarixini yuklab oladi.
-
-    Returns:
-        (jetton_address, {"income_raw": int, "outcome_raw": int, "tx_count": int})
-    """
-    in_raw: int = 0
-    out_raw: int = 0
-    tx_n: int = 0
+    decimals: int,
+) -> tuple[str, list[dict]]:
+    """BIR jetton uchun transfer tarixini yuklab oladi."""
+    transfers: list[dict] = []
+    divisor: float = 10 ** decimals
 
     cursor = None
     for _ in range(50):  # Maks 5000 transfer
@@ -146,6 +184,8 @@ async def _fetch_one_jetton_history(
             break
 
         for event in events:
+            event_id = event.get("event_id") or ""
+            tx_time = event.get("timestamp", 0)
             for action in event.get("actions", []):
                 if action.get("type") != "JettonTransfer":
                     continue
@@ -162,16 +202,26 @@ async def _fetch_one_jetton_history(
                 recipient = (jt.get("recipient") or {}).get("address", "").lower()
 
                 if sender == raw_address:
-                    out_raw += amt_raw
-                    tx_n += 1
+                    transfers.append({
+                        "tx_hash": event_id,
+                        "timestamp": tx_time,
+                        "symbol": symbol,
+                        "amount": amt_raw / divisor,
+                        "direction": "out",
+                        "counterparty": raw_to_friendly(recipient)
+                    })
                 elif recipient == raw_address:
-                    in_raw += amt_raw
-                    tx_n += 1
+                    transfers.append({
+                        "tx_hash": event_id,
+                        "timestamp": tx_time,
+                        "symbol": symbol,
+                        "amount": amt_raw / divisor,
+                        "direction": "in",
+                        "counterparty": raw_to_friendly(sender)
+                    })
 
-        # Pagination — eng oxirgi event'ning lt'sini ishlatamiz
         next_from = data.get("next_from")
         if next_from in (None, 0, "0"):
-            # Fallback: oxirgi event lt
             last_lt = events[-1].get("lt")
             if not last_lt or last_lt == cursor:
                 break
@@ -184,11 +234,7 @@ async def _fetch_one_jetton_history(
 
         await asyncio.sleep(0.1)
 
-    return jetton_address.lower(), {
-        "income_raw": in_raw,
-        "outcome_raw": out_raw,
-        "tx_count": tx_n,
-    }
+    return jetton_address.lower(), transfers
 
 
 async def _fetch_all_jettons_history(
@@ -197,58 +243,43 @@ async def _fetch_all_jettons_history(
     raw_address: str,
     jetton_balance_map: dict[str, dict],
     cb: ProgressCb,
-) -> dict[str, dict]:
+) -> list[dict]:
     """BARCHA jettonlar uchun transfer tarixini PARALLEL yuklab oladi.
 
     Returns:
-        {jetton_address: {"income_raw": int, "outcome_raw": int, "tx_count": int}}
+        list[dict]: List of all jetton transfers.
     """
     if not jetton_balance_map:
-        return {}
+        return []
 
     tasks = []
     for j_addr, info in jetton_balance_map.items():
         tasks.append(_fetch_one_jetton_history(
-            client, address, raw_address, j_addr, info.get("symbol", "?")
+            client, address, raw_address, j_addr, info.get("symbol", "?"), info.get("decimals", 9)
         ))
 
-    stats: dict[str, dict] = {}
+    all_transfers: list[dict] = []
     completed = 0
     total = len(tasks)
 
-    # asyncio.as_completed bilan progress'ni real-time yangilab boramiz
     for coro in asyncio.as_completed(tasks):
         try:
-            j_addr, j_stats = await coro
-            stats[j_addr] = j_stats
+            _, j_transfers = await coro
+            all_transfers.extend(j_transfers)
         except Exception as e:
             logger.warning(f"Jetton history fetch task error: {e}")
         completed += 1
-        # Progress: 30% -> 90%
         pct = 30 + int(60 * completed / total)
         await cb("progress_token_history", pct, symbol=f"{completed}/{total}")
 
-    return stats
+    return all_transfers
 
 
 async def get_ton_balance(
     address: str,
     progress: ProgressCb | None = None,
 ) -> dict:
-    """TON hamyon to'liq professional audit (tonapi + toncenter cross-check).
-
-    Tezlik uchun:
-      - Native TX va jetton history PARALLEL yuklanadi
-      - Bulk jetton endpoint (per-token chaqiruv emas)
-
-    Args:
-        address: TON hamyon manzili.
-        progress: Progress callback funksiyasi.
-
-    Returns:
-        Audit natijasi — har bir aktiv (TON, USDT, TUSD, ...) bo'yicha
-        to'liq ma'lumot va umumiy yig'indi.
-    """
+    """TON hamyon to'liq professional audit."""
     cb: ProgressCb = progress or _noop_progress
 
     current_balance: float = 0.0
@@ -257,7 +288,7 @@ async def get_ton_balance(
     raw_address: str = ""
 
     async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
-        # ═══ 1. Hozirgi balans + raw address (parallel taqqoslash uchun) ═══
+        # ═══ 1. Hozirgi balans + raw address ═══
         await cb("progress_balance", 5)
         try:
             resp = await safe_request(
@@ -272,7 +303,7 @@ async def get_ton_balance(
             logger.error(f"TON account fetch error: {e}")
             return {"network": "TON", "address": address, "error": str(e)}
 
-        # ═══ 2. Toncenter cross-check (parallel kerak emas — tez) ═══
+        # ═══ 2. Toncenter cross-check ═══
         await cb("progress_verifying", 10)
         try:
             resp2 = await client.get(
@@ -292,7 +323,7 @@ async def get_ton_balance(
         except Exception as e:
             logger.warning(f"Toncenter cross-check failed: {e}")
 
-        # ═══ 3. Hozirgi jetton balanslari (avvalo, parallel pipeline uchun kerak) ═══
+        # ═══ 3. Hozirgi jetton balanslari ═══
         await cb("progress_tokens", 18)
         jetton_balance_map: dict[str, dict] = {}
         try:
@@ -315,7 +346,46 @@ async def get_ton_balance(
         except Exception as e:
             logger.warning(f"TON jettons fetch error: {e}")
 
-        # ═══ 4. PARALLEL: Native TON tranzaksiyalari + Har bir jetton tarixi ═══
+        # Tarixiy 0 balansli jettonlarni aniqlash (har qanday tokenni tahlil qilish uchun)
+        try:
+            before_lt = None
+            for _ in range(3):  # Oxirgi 300 eventni tekshiramiz
+                params = {"limit": 100}
+                if before_lt:
+                    params["before_lt"] = before_lt
+                resp_ev = await safe_request(
+                    client, "GET",
+                    f"{_TONAPI_URL}/accounts/{address}/events",
+                    headers=_HEADERS,
+                    params=params,
+                )
+                data_ev = resp_ev.json()
+                events = data_ev.get("events", [])
+                if not events:
+                    break
+                for event in events:
+                    for action in event.get("actions", []):
+                        if action.get("type") == "JettonTransfer":
+                            jt = action.get("JettonTransfer", {})
+                            j_info = jt.get("jetton", {})
+                            j_addr = j_info.get("address", "").lower()
+                            if j_addr and j_addr not in jetton_balance_map:
+                                decimals = int(j_info.get("decimals", 9))
+                                jetton_balance_map[j_addr] = {
+                                    "symbol": j_info.get("symbol", "UNKNOWN"),
+                                    "decimals": decimals,
+                                    "raw_balance": 0,
+                                }
+                last_lt = events[-1].get("lt")
+                if not last_lt:
+                    break
+                before_lt = last_lt
+                if len(events) < 100:
+                    break
+        except Exception as e:
+            logger.warning(f"Error discovering jettons from events: {e}")
+
+        # ═══ 4. PARALLEL: Native TON tranzaksiyalari + Jettonlar tarixi ═══
         await cb("progress_txns", 25, count=0)
 
         native_task = _fetch_native_txs(client, address, raw_address, cb)
@@ -324,57 +394,78 @@ async def get_ton_balance(
         )
 
         try:
-            (total_in, total_out, tx_count, yearly_stats), jetton_stats = await asyncio.gather(
+            native_transfers, jetton_transfers = await asyncio.gather(
                 native_task, jetton_task
             )
         except Exception as e:
             logger.error(f"Parallel fetch error: {e}")
-            total_in, total_out, tx_count, yearly_stats = 0, 0, 0, {}
-            jetton_stats = {}
+            native_transfers, jetton_transfers = [], []
 
-    await cb("progress_finalizing", 95)
+    # ═══ 5. Swaplarni aniqlash va ajratish ═══
+    all_transfers = native_transfers + jetton_transfers
+    from utils import process_transfers_and_detect_swaps
+    normal_transfers, swaps = process_transfers_and_detect_swaps(all_transfers)
 
-    # ═══ 5. Aktivlar ro'yxatini yig'ish ═══
-    income_gram: float = total_in / _NANOTON_DIVISOR
-    outcome_gram: float = total_out / _NANOTON_DIVISOR
-    volume_gram: float = income_gram + outcome_gram
+    # ═══ 6. Aktivlar statistikasini hisoblash ═══
+    token_stats: dict[str, dict] = {}
+    for t in normal_transfers:
+        sym = t["symbol"]
+        if sym not in token_stats:
+            token_stats[sym] = {"income": 0.0, "outcome": 0.0, "tx_count": 0}
+        token_stats[sym]["tx_count"] += 1
+        if t["direction"] == "in":
+            token_stats[sym]["income"] += t["amount"]
+        else:
+            token_stats[sym]["outcome"] += t["amount"]
 
-    balance_str: str = f"{current_balance:,.4f} GRAM" + (" ✓" if balance_verified else "")
+    # Yillik statistika (faqat normal native GRAM uchun)
+    yearly_stats: dict[str, dict[str, float]] = {}
+    for t in normal_transfers:
+        if t["symbol"] == "GRAM":
+            year = "Unknown"
+            if t["timestamp"]:
+                year = str(datetime.fromtimestamp(t["timestamp"], tz=timezone.utc).year)
+            if year not in yearly_stats:
+                yearly_stats[year] = {"in": 0.0, "out": 0.0}
+            if t["direction"] == "in":
+                yearly_stats[year]["in"] += t["amount"]
+            else:
+                yearly_stats[year]["out"] += t["amount"]
+
+    # GRAM (Native) statistikalari
+    gram_stats = token_stats.get("GRAM", {"income": 0.0, "outcome": 0.0, "tx_count": 0})
+    income_gram = gram_stats["income"]
+    outcome_gram = gram_stats["outcome"]
+    volume_gram = income_gram + outcome_gram
+
+    balance_str = f"{current_balance:,.4f} GRAM" + (" ✓" if balance_verified else "")
 
     assets: list[dict] = []
-
-    # 5.1. GRAM (Native)
     assets.append({
         "symbol": "GRAM",
         "is_native": True,
-        "balance": f"{current_balance:,.4f} GRAM" + (" ✓" if balance_verified else ""),
+        "balance": balance_str,
         "income": f"{income_gram:,.4f} GRAM",
         "outcome": f"{outcome_gram:,.4f} GRAM",
         "net": f"{income_gram - outcome_gram:,.4f} GRAM",
         "volume": f"{volume_gram:,.4f} GRAM",
-        "tx_count": tx_count,
+        "tx_count": gram_stats["tx_count"],
     })
 
-    # 5.2. Jettonlar — balanslar + transfer tarixi birlashtiriladi
-    all_jetton_addrs = set(jetton_balance_map.keys()) | set(jetton_stats.keys())
+    # Jettonlar statistikalari
+    for j_addr, bal_info in jetton_balance_map.items():
+        symbol = bal_info["symbol"]
+        decimals = bal_info["decimals"]
+        raw_balance = bal_info["raw_balance"]
+        token_balance = raw_balance / (10 ** decimals)
 
-    for j_addr in all_jetton_addrs:
-        bal_info = jetton_balance_map.get(j_addr, {})
-        stats_info = jetton_stats.get(j_addr, {"income_raw": 0, "outcome_raw": 0, "tx_count": 0})
+        j_stats = token_stats.get(symbol, {"income": 0.0, "outcome": 0.0, "tx_count": 0})
+        j_income = j_stats["income"]
+        j_outcome = j_stats["outcome"]
+        j_volume = j_income + j_outcome
+        j_net = j_income - j_outcome
+        j_tx_count = j_stats["tx_count"]
 
-        symbol: str = bal_info.get("symbol", "UNKNOWN")
-        decimals: int = bal_info.get("decimals", 9)
-        divisor: float = 10 ** decimals
-        raw_balance: int = bal_info.get("raw_balance", 0)
-
-        token_balance: float = raw_balance / divisor
-        j_income: float = stats_info["income_raw"] / divisor
-        j_outcome: float = stats_info["outcome_raw"] / divisor
-        j_volume: float = j_income + j_outcome
-        j_net: float = j_income - j_outcome
-        j_tx_count: int = stats_info["tx_count"]
-
-        # Faqat balansi bor yoki transferlari bor jettonlarni ko'rsatamiz
         if token_balance < 0.00001 and j_tx_count == 0:
             continue
 
@@ -389,28 +480,24 @@ async def get_ton_balance(
             "tx_count": j_tx_count,
         })
 
-    # ═══ 6. Umumiy yig'indi ═══
-    # Native tx_count — bu hamyondagi BARCHA on-chain tranzaksiyalar (TON va jettonlar)
-    # Har token uchun "tx_count" — o'sha tokenni o'z ichiga olgan transferlar soni
-    grand_tx_count: int = tx_count
-    asset_count: int = len(assets)
+    grand_tx_count = len(normal_transfers)
+    asset_count = len(assets)
 
     return {
         "network": "TON",
         "address": address,
         "status": account_status,
         "current_balance": balance_str,
-        # Asosiy ko'rsatkichlar — GRAM (native) bo'yicha (risk_engine moslik uchun)
         "total_income": f"{income_gram:,.4f} GRAM",
         "total_outcome": f"{outcome_gram:,.4f} GRAM",
         "net_balance": f"{income_gram - outcome_gram:,.4f} GRAM",
         "total_volume": f"{volume_gram:,.4f} GRAM",
-        "tx_count": tx_count,
-        # Yangi — har bir aktiv bo'yicha to'liq ma'lumot
+        "tx_count": grand_tx_count,
         "assets": assets,
         "grand_tx_count": grand_tx_count,
         "asset_count": asset_count,
         "yearly_stats": yearly_stats,
-        # Eski moslik uchun
+        "swaps": swaps,
+        "normal_transfers": normal_transfers,
         "tokens": [a for a in assets if not a["is_native"]],
     }
