@@ -714,71 +714,21 @@ async def cmd_web(message: types.Message) -> None:
         )
         return
 
-    # Ma'lumotlarni yig'ish va URL hash ga qo'shish
-    import json
-    import base64
+    # API tunnel URL ni olish
     import time
-    from urllib.parse import quote
-
-    stats = get_stats()
-    users = get_all_users()
-    audits = get_recent_audits(20)
-
-    # Ma'lumotlarni minimal qilish (faqat kerakli fieldlar)
-    compact_users = []
-    for u in users:
-        compact_users.append({
-            "id": u.get("user_id"),
-            "a": u.get("alias", ""),
-            "u": u.get("username", ""),
-            "q": u.get("query_count", 0),
-            "d": (u.get("registered_at", "") or "")[:10],
-            "ad": u.get("is_admin", 0),
-            "ap": u.get("is_approved", 0),
-        })
-
-    compact_audits = []
-    for a in audits:
-        compact_audits.append({
-            "n": a.get("network", ""),
-            "addr": a.get("address", ""),
-            "r": a.get("risk_level", "LOW"),
-            "al": a.get("alias", ""),
-            "t": (a.get("created_at", "") or "")[:16],
-        })
-
-    data = {
-        "s": stats,
-        "u": compact_users,
-        "a": compact_audits,
-    }
-
-    def _encode(d: dict) -> str:
-        """Dict -> URL-safe base64 (UTF-8, padding yo'q)."""
-        json_bytes = json.dumps(d, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
-        return base64.urlsafe_b64encode(json_bytes).decode().rstrip('=')
-
-    # GitHub Pages URL + data (query param orqali, hash emas — Telegram hash'ni o'chiradi)
     import web_server
     api_url = getattr(web_server, "_tunnel_url", "")
 
     base_url: str = WEBAPP_URL.rstrip("/") + "/index.html"
-    data_b64: str = _encode(data)
     cache_buster = int(time.time())
-    
-    api_param = f"&api={api_url}" if api_url else ""
-    webapp_url: str = f"{base_url}?d={data_b64}&v={cache_buster}{api_param}"
 
-    # Telegram URL limit tekshiruvi (~2048)
-    if len(webapp_url) > 2048:
-        data["a"] = compact_audits[:10]
-        data_b64 = _encode(data)
-        webapp_url = f"{base_url}?d={data_b64}&v={cache_buster}{api_param}"
-
-    if len(webapp_url) > 2048:
-        data = {"s": stats, "u": compact_users[:5], "a": compact_audits[:5]}
-        data_b64 = _encode(data)
-        webapp_url = f"{base_url}?d={data_b64}&v={cache_buster}{api_param}"
+    # URL ga faqat api= parametrini qo'shamiz.
+    # Barcha ma'lumotlar (foydalanuvchilar, auditlar) webapp ochilganda
+    # API orqali to'liq yuklanadi — foydalanuvchilar soni cheklanmaydi.
+    if api_url:
+        webapp_url: str = f"{base_url}?v={cache_buster}&api={api_url}"
+    else:
+        webapp_url: str = f"{base_url}?v={cache_buster}"
 
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
