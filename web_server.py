@@ -210,7 +210,7 @@ def create_web_app() -> web.Application:
 
 
 async def _open_tunnel(port: int) -> str:
-    """localhost.run orqali SSH tunnel ochish (bepul HTTPS).
+    """serveo.net orqali SSH tunnel ochish (bepul HTTPS).
 
     Hech narsa o'rnatish kerak emas — faqat SSH.
 
@@ -224,14 +224,15 @@ async def _open_tunnel(port: int) -> str:
             "ssh",
             "-o", "StrictHostKeyChecking=no",
             "-o", "ServerAliveInterval=60",
+            "-o", "ExitOnForwardFailure=yes",
             "-R", f"80:localhost:{port}",
-            "nokey@localhost.run",
+            "serveo.net",
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
         )
 
-        # URL ni stdout dan olish (max 15 soniya kutish)
-        for _ in range(30):
+        # URL ni stdout dan olish (max 20 soniya kutish)
+        for _ in range(40):
             if _tunnel_process.stdout:
                 try:
                     line = await asyncio.wait_for(
@@ -240,24 +241,21 @@ async def _open_tunnel(port: int) -> str:
                     decoded = line.decode("utf-8", errors="ignore").strip()
                     if decoded:
                         logger.info(f"Tunnel output: {decoded}")
-                        # URL ni topish
-                        url_match = re.search(r"(https://[a-z0-9]+\.lhr\.life[^\s]*)", decoded)
+                        # serveo.net URL
+                        url_match = re.search(r"(https://[^\s]+serveousercontent\.com[^\s]*)", decoded)
                         if url_match:
                             return url_match.group(1)
-                        url_match2 = re.search(r"(https://[^\s]+\.localhost\.run[^\s]*)", decoded)
+                        # Umumiy HTTPS URL fallback
+                        url_match2 = re.search(r"(https://[^\s]+)", decoded)
                         if url_match2:
                             return url_match2.group(1)
-                        # Umumiy HTTPS URL
-                        url_match3 = re.search(r"(https://[^\s]+)", decoded)
-                        if url_match3:
-                            return url_match3.group(1)
                 except asyncio.TimeoutError:
                     continue
             else:
                 await asyncio.sleep(0.5)
 
     except FileNotFoundError:
-        logger.error("SSH topilmadi. localhost.run ishlamaydi.")
+        logger.error("SSH topilmadi. Tunnel ishlamaydi.")
     except Exception as e:
         logger.error(f"Tunnel xatolik: {e}")
 
