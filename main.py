@@ -178,48 +178,48 @@ def get_webapp_url() -> str:
 
 
 def main_menu_keyboard(lang: str, is_user_admin: bool = False) -> ReplyKeyboardMarkup:
-    """Foydalanuvchi uchun asosiy menyu tugmalari (ReplyKeyboard)."""
+    """Foydalanuvchi uchun asosiy menyu tugmalari (ReplyKeyboard) — Emojisiz Professional."""
     btn_help = {
-        "uz": "ℹ️ Yordam",
-        "ru": "ℹ️ Помощь",
-        "en": "ℹ️ Help"
-    }.get(lang, "ℹ️ Yordam")
+        "uz": "Yordam",
+        "ru": "Помощь",
+        "en": "Help"
+    }.get(lang, "Yordam")
     
     btn_stats = {
-        "uz": "📊 Shaxsiy statistika",
-        "ru": "📊 Моя статистика",
-        "en": "📊 My Stats"
-    }.get(lang, "📊 Shaxsiy statistika")
+        "uz": "Shaxsiy statistika",
+        "ru": "Моя статистика",
+        "en": "My Stats"
+    }.get(lang, "Shaxsiy statistika")
     
     btn_history = {
-        "uz": "📜 So'rovlar tarixi",
-        "ru": "📜 История запросов",
-        "en": "📜 Query History"
-    }.get(lang, "📜 So'rovlar tarixi")
+        "uz": "So'rovlar tarixi",
+        "ru": "История запросов",
+        "en": "Query History"
+    }.get(lang, "So'rovlar tarixi")
     
     btn_lang = {
-        "uz": "🌐 Tilni o'zgartirish",
-        "ru": "🌐 Сменить язык",
-        "en": "🌐 Change Language"
-    }.get(lang, "🌐 Tilni o'zgartirish")
+        "uz": "Tilni o'zgartirish",
+        "ru": "Сменить язык",
+        "en": "Change Language"
+    }.get(lang, "Tilni o'zgartirish")
     
     btn_risk = {
-        "uz": "🛡 Risk haqida",
-        "ru": "🛡 О рисках",
-        "en": "🛡 About Risk"
-    }.get(lang, "🛡 Risk haqida")
+        "uz": "Risk haqida",
+        "ru": "О рисках",
+        "en": "About Risk"
+    }.get(lang, "Risk haqida")
     
     btn_admin = {
-        "uz": "⚙️ Admin Panel",
-        "ru": "⚙️ Админ Панель",
-        "en": "⚙️ Admin Panel"
-    }.get(lang, "⚙️ Admin Panel")
+        "uz": "Admin Panel",
+        "ru": "Админ Панель",
+        "en": "Admin Panel"
+    }.get(lang, "Admin Panel")
 
     btn_web = {
-        "uz": "🌐 Web Panel",
-        "ru": "🌐 Веб Панель",
-        "en": "🌐 Web Panel"
-    }.get(lang, "🌐 Web Panel")
+        "uz": "Web Panel",
+        "ru": "Веб Панель",
+        "en": "Web Panel"
+    }.get(lang, "Web Panel")
     
     keyboard_buttons = [
         [KeyboardButton(text=btn_help), KeyboardButton(text=btn_risk)],
@@ -552,7 +552,7 @@ async def on_reject_request(callback: CallbackQuery) -> None:
 # ═══════════════════════════════════════════
 # /help
 # ═══════════════════════════════════════════
-@dp.message(or_f(Command("help"), F.text.in_({"ℹ️ Yordam", "ℹ️ Помощь", "ℹ️ Help"})))
+@dp.message(or_f(Command("help"), F.text.in_({"Yordam", "Помощь", "Help"})))
 async def cmd_help(message: types.Message) -> None:
     """Yordam."""
     user = get_user(message.from_user.id)
@@ -562,9 +562,9 @@ async def cmd_help(message: types.Message) -> None:
 
 
 # ═══════════════════════════════════════════
-# /risk — Risk darajasi haqida ma'lumot
+# /risk — Risk darajasi haqida ma'lumon
 # ═══════════════════════════════════════════
-@dp.message(or_f(Command("risk"), F.text.in_({"🛡 Risk haqida", "🛡 О рисках", "🛡 About Risk"})))
+@dp.message(or_f(Command("risk"), F.text.in_({"Risk haqida", "О рисках", "About Risk"})))
 async def cmd_risk(message: types.Message) -> None:
     """Risk darajasi qanday hisoblanishi haqida batafsil ma'lumot."""
     user = get_user(message.from_user.id)
@@ -576,7 +576,7 @@ async def cmd_risk(message: types.Message) -> None:
 # ═══════════════════════════════════════════
 # /language
 # ═══════════════════════════════════════════
-@dp.message(or_f(Command("language"), F.text.in_({"🌐 Tilni o'zgartirish", "🌐 Сменить язык", "🌐 Change Language"})))
+@dp.message(or_f(Command("language"), F.text.in_({"Tilni o'zgartirish", "Сменить язык", "Change Language"})))
 async def cmd_language(message: types.Message) -> None:
     """Tilni o'zgartirish."""
     user = get_user(message.from_user.id)
@@ -591,7 +591,7 @@ async def cmd_language(message: types.Message) -> None:
 # ═══════════════════════════════════════════
 # /mystats
 # ═══════════════════════════════════════════
-@dp.message(or_f(Command("mystats"), F.text.in_({"📊 Shaxsiy statistika", "📊 Моя статистика", "📊 My Stats"})))
+@dp.message(or_f(Command("mystats"), F.text.in_({"Shaxsiy statistika", "Моя статистика", "My Stats"})))
 async def cmd_mystats(message: types.Message) -> None:
     """Shaxsiy statistika."""
     user = get_user(message.from_user.id)
@@ -615,7 +615,7 @@ async def cmd_mystats(message: types.Message) -> None:
 # ═══════════════════════════════════════════
 # /history
 # ═══════════════════════════════════════════
-@dp.message(or_f(Command("history"), F.text.in_({"📜 So'rovlar tarixi", "📜 История запросов", "📜 Query History"})))
+@dp.message(or_f(Command("history"), F.text.in_({"So'rovlar tarixi", "История запросов", "Query History"})))
 async def cmd_history(message: types.Message) -> None:
     """So'rovlar tarixi."""
     user = get_user(message.from_user.id)
@@ -646,7 +646,7 @@ async def cmd_history(message: types.Message) -> None:
 # ═══════════════════════════════════════════
 # /admin
 # ═══════════════════════════════════════════
-@dp.message(or_f(Command("admin"), F.text.in_({"⚙️ Admin Panel", "⚙️ Админ Панель", "⚙️ Admin Panel"})))
+@dp.message(or_f(Command("admin"), F.text.in_({"Admin Panel", "Админ Панель", "Admin Panel"})))
 async def cmd_admin(message: types.Message, state: FSMContext) -> None:
     """Admin autentifikatsiya."""
     user = get_user(message.from_user.id)
