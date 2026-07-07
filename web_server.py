@@ -249,6 +249,7 @@ async def _open_tunnel(port: int) -> str:
         _tunnel_process = await asyncio.create_subprocess_exec(
             "/usr/local/bin/cloudflared",
             "tunnel",
+            "--config", "/dev/null",
             "--protocol", "http2",
             "--url", f"http://localhost:{port}",
             stdout=asyncio.subprocess.PIPE,
