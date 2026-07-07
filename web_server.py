@@ -207,7 +207,7 @@ def create_web_app() -> web.Application:
         response = await handler(request)
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "X-Telegram-Init-Data, Content-Type, Authorization"
+        response.headers["Access-Control-Allow-Headers"] = "X-Telegram-Init-Data, Content-Type, Authorization, X-Admin-Id, X-Admin-Token"
         response.headers["Connection"] = "keep-alive"
         return response
 
