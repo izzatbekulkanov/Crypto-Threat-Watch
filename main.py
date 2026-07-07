@@ -180,7 +180,7 @@ def get_webapp_url(user_id: int) -> str:
     return f"{base_url}?v={cache_buster}&uid={user_id}&token={token}"
 
 
-def main_menu_keyboard(lang: str, is_user_admin: bool = False, user_id: Optional[int] = None) -> ReplyKeyboardMarkup:
+def main_menu_keyboard(lang: str, is_user_admin: bool = False, user_id: int | None = None) -> ReplyKeyboardMarkup:
     """Foydalanuvchi uchun asosiy menyu tugmalari (ReplyKeyboard) — Emojisiz Professional."""
     btn_help = {
         "uz": "Yordam",
