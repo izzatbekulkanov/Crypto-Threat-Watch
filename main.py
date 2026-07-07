@@ -1003,7 +1003,7 @@ async def handle_link(message: types.Message, state: FSMContext) -> None:
         assets: list[dict] = data.get("assets", [])
         if assets:
             report += t("assets_header", lang)
-            for asset in assets:
+            for asset in assets[:5]:
                 report += t(
                     "asset_block", lang,
                     symbol=asset.get("symbol", "?"),
@@ -1014,6 +1014,13 @@ async def handle_link(message: types.Message, state: FSMContext) -> None:
                     volume=asset.get("volume", "—"),
                     tx_count=asset.get("tx_count", 0),
                 )
+            if len(assets) > 5:
+                more_assets_text = {
+                    "uz": f"\n• _...yana {len(assets) - 5} ta aktiv (batafsil hisobot faylida)._\n",
+                    "ru": f"\n• _...еще {len(assets) - 5} активов (подробнее в файле отчета)._\n",
+                    "en": f"\n• _...and {len(assets) - 5} more assets (details in the report file)._\n",
+                }.get(lang, f"\n• _...and {len(assets) - 5} more assets (details in report)._\n")
+                report += more_assets_text
 
             # Yakuniy umumiy yig'indi
             report += t(
