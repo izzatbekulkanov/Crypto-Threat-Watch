@@ -393,30 +393,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "🔑 *Admin authentication*\n\nEnter password:",
     },
     "admin_success": {
-        "uz": (
-            "✅ *Admin huquqi berildi!*\n\n"
-            "Mavjud buyruqlar:\n"
-            "/stats — Umumiy statistika\n"
-            "/users — Foydalanuvchilar\n"
-            "/audits — Oxirgi auditlar\n"
-            "/broadcast — Xabar yuborish"
-        ),
-        "ru": (
-            "✅ *Права администратора получены!*\n\n"
-            "Доступные команды:\n"
-            "/stats — Общая статистика\n"
-            "/users — Пользователи\n"
-            "/audits — Последние аудиты\n"
-            "/broadcast — Рассылка"
-        ),
-        "en": (
-            "✅ *Admin access granted!*\n\n"
-            "Available commands:\n"
-            "/stats — General statistics\n"
-            "/users — Users\n"
-            "/audits — Recent audits\n"
-            "/broadcast — Broadcast message"
-        ),
+        "uz": "✅ *Admin boshqaruv paneli ishga tushdi.* Menyu tugmalaridan foydalaning.",
+        "ru": "✅ *Панель управления администратора запущена.* Используйте кнопки меню.",
+        "en": "✅ *Admin control panel activated.* Please use the menu buttons below.",
     },
     "admin_fail": {
         "uz": "❌ *Noto'g'ri parol.*",

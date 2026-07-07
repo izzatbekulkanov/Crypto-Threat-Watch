@@ -241,6 +241,51 @@ def main_menu_keyboard(lang: str, is_user_admin: bool = False) -> ReplyKeyboardM
     )
 
 
+def admin_menu_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    """Adminlar uchun boshqaruv tugmalari menyusi (ReplyKeyboard) — Professional."""
+    btn_stats = {
+        "uz": "Umumiy statistika",
+        "ru": "Общая статистика",
+        "en": "General Stats"
+    }.get(lang, "Umumiy statistika")
+    
+    btn_users = {
+        "uz": "Foydalanuvchilar",
+        "ru": "Пользователи",
+        "en": "Users"
+    }.get(lang, "Foydalanuvchilar")
+    
+    btn_audits = {
+        "uz": "Oxirgi auditlar",
+        "ru": "Последние аудиты",
+        "en": "Recent Audits"
+    }.get(lang, "Oxirgi auditlar")
+    
+    btn_broadcast = {
+        "uz": "Xabar yuborish (Broadcast)",
+        "ru": "Рассылка (Broadcast)",
+        "en": "Broadcast message"
+    }.get(lang, "Xabar yuborish (Broadcast)")
+    
+    btn_back = {
+        "uz": "Orqaga",
+        "ru": "Назад",
+        "en": "Back"
+    }.get(lang, "Orqaga")
+    
+    keyboard_buttons = [
+        [KeyboardButton(text=btn_stats), KeyboardButton(text=btn_users)],
+        [KeyboardButton(text=btn_audits), KeyboardButton(text=btn_broadcast)],
+        [KeyboardButton(text=btn_back)]
+    ]
+    
+    return ReplyKeyboardMarkup(
+        keyboard=keyboard_buttons,
+        resize_keyboard=True,
+        persistent=True
+    )
+
+
 # ═══════════════════════════════════════════
 # Progress bar yaratish
 # ═══════════════════════════════════════════
@@ -657,7 +702,7 @@ async def cmd_admin(message: types.Message, state: FSMContext) -> None:
     lang: str = user["language"]
 
     if is_admin(message.from_user.id):
-        await message.answer(t("admin_success", lang), reply_markup=main_menu_keyboard(lang, True), parse_mode=ParseMode.MARKDOWN)
+        await message.answer(t("admin_success", lang), reply_markup=admin_menu_keyboard(lang), parse_mode=ParseMode.MARKDOWN)
         return
 
     await state.set_state(AdminAuth.waiting_for_password)
@@ -673,7 +718,7 @@ async def on_admin_password(message: types.Message, state: FSMContext) -> None:
     if message.text and message.text.strip() == ADMIN_PASSWORD:
         set_admin(message.from_user.id)
         await state.clear()
-        await message.answer(t("admin_success", lang), reply_markup=main_menu_keyboard(lang, True), parse_mode=ParseMode.MARKDOWN)
+        await message.answer(t("admin_success", lang), reply_markup=admin_menu_keyboard(lang), parse_mode=ParseMode.MARKDOWN)
         logger.info(f"Yangi admin: {message.from_user.id}")
     else:
         await state.clear()
@@ -684,7 +729,7 @@ async def on_admin_password(message: types.Message, state: FSMContext) -> None:
 # ═══════════════════════════════════════════
 # /stats (admin)
 # ═══════════════════════════════════════════
-@dp.message(Command("stats"))
+@dp.message(or_f(Command("stats"), F.text.in_({"Umumiy statistika", "Общая статистика", "General Stats"})))
 async def cmd_stats(message: types.Message) -> None:
     """Umumiy statistika (admin)."""
     user = get_user(message.from_user.id)
@@ -703,6 +748,7 @@ async def cmd_stats(message: types.Message) -> None:
           users=stats["total_users"],
           queries=stats["total_queries"],
           audits=stats["total_audits"]),
+        reply_markup=admin_menu_keyboard(lang),
         parse_mode=ParseMode.MARKDOWN,
     )
 
@@ -710,7 +756,7 @@ async def cmd_stats(message: types.Message) -> None:
 # ═══════════════════════════════════════════
 # /users (admin)
 # ═══════════════════════════════════════════
-@dp.message(Command("users"))
+@dp.message(or_f(Command("users"), F.text.in_({"Foydalanuvchilar", "Пользователи", "Users"})))
 async def cmd_users(message: types.Message) -> None:
     """Foydalanuvchilar ro'yxati (admin)."""
     user = get_user(message.from_user.id)
@@ -725,7 +771,7 @@ async def cmd_users(message: types.Message) -> None:
 
     users = get_all_users()
     if not users:
-        await message.answer("📭 Foydalanuvchilar yo'q.")
+        await message.answer("📭 Foydalanuvchilar yo'q.", reply_markup=admin_menu_keyboard(lang))
         return
 
     lines: list[str] = ["👥 *Foydalanuvchilar:*\n━━━━━━━━━━━━━━━━━━━━━\n"]
@@ -735,13 +781,13 @@ async def cmd_users(message: types.Message) -> None:
             f"{i}. `{u['alias']}`{badge} — *{u['query_count']}* so'rov"
         )
 
-    await message.answer("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
+    await message.answer("\n".join(lines), reply_markup=admin_menu_keyboard(lang), parse_mode=ParseMode.MARKDOWN)
 
 
 # ═══════════════════════════════════════════
 # /audits (admin)
 # ═══════════════════════════════════════════
-@dp.message(Command("audits"))
+@dp.message(or_f(Command("audits"), F.text.in_({"Oxirgi auditlar", "Последние аудиты", "Recent Audits"})))
 async def cmd_audits(message: types.Message) -> None:
     """Oxirgi auditlar (admin)."""
     user = get_user(message.from_user.id)
@@ -756,7 +802,7 @@ async def cmd_audits(message: types.Message) -> None:
 
     audits = get_recent_audits(15)
     if not audits:
-        await message.answer("📭 Auditlar yo'q.")
+        await message.answer("📭 Auditlar yo'q.", reply_markup=admin_menu_keyboard(lang))
         return
 
     lines: list[str] = ["📋 *Oxirgi auditlar:*\n━━━━━━━━━━━━━━━━━━━━━\n"]
@@ -768,7 +814,55 @@ async def cmd_audits(message: types.Message) -> None:
             f"   📅 {date_str}\n"
         )
 
-    await message.answer("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
+    await message.answer("\n".join(lines), reply_markup=admin_menu_keyboard(lang), parse_mode=ParseMode.MARKDOWN)
+
+
+# ═══════════════════════════════════════════
+# Broadcast xabar yo'naltirish
+# ═══════════════════════════════════════════
+@dp.message(or_f(Command("broadcast"), F.text.in_({"Xabar yuborish (Broadcast)", "Рассылка (Broadcast)", "Broadcast message"})))
+async def cmd_broadcast_info(message: types.Message) -> None:
+    """Broadcast xabar yuborish haqida yo'riqnoma."""
+    user = get_user(message.from_user.id)
+    if not user:
+        await message.answer(t("not_registered", "uz"), parse_mode=ParseMode.MARKDOWN)
+        return
+
+    lang: str = user["language"]
+    if not is_admin(message.from_user.id):
+        await message.answer(t("not_admin", lang), parse_mode=ParseMode.MARKDOWN)
+        return
+
+    text = {
+        "uz": "ℹ️ *Xabar yuborish (broadcast)* faqat Web panel orqali amalga oshiriladi.\n\nBuning uchun bosh sahifaga (Orqaga) qaytib, *Web Panel* tugmasini bosing.",
+        "ru": "ℹ️ *Рассылка сообщений (broadcast)* доступна только через Веб-панель.\n\nВернитесь на главный экран (Назад) и нажмите кнопку *Web Panel*.",
+        "en": "ℹ️ *Broadcasting messages* is only available via the Web Panel.\n\nGo back to the main menu (Back) and click the *Web Panel* button."
+    }.get(lang, "ℹ️ Xabar yuborish faqat Web panel orqali amalga oshiriladi.")
+    
+    await message.answer(text, reply_markup=admin_menu_keyboard(lang), parse_mode=ParseMode.MARKDOWN)
+
+
+# ═══════════════════════════════════════════
+# Orqaga (Asosiy menyuga qaytish)
+# ═══════════════════════════════════════════
+@dp.message(F.text.in_({"Orqaga", "Назад", "Back"}))
+async def cmd_back_to_main(message: types.Message) -> None:
+    """Orqaga — asosiy menyuga qaytish."""
+    user = get_user(message.from_user.id)
+    if not user:
+        await message.answer(t("not_registered", "uz"), parse_mode=ParseMode.MARKDOWN)
+        return
+
+    lang: str = user["language"]
+    is_user_admin = is_admin(message.from_user.id)
+    
+    text = {
+        "uz": "Asosiy menyu.",
+        "ru": "Главное меню.",
+        "en": "Main menu."
+    }.get(lang, "Asosiy menyu.")
+
+    await message.answer(text, reply_markup=main_menu_keyboard(lang, is_user_admin), parse_mode=ParseMode.MARKDOWN)
 
 
 # ═══════════════════════════════════════════
