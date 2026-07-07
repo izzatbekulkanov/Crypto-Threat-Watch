@@ -223,6 +223,17 @@ def create_web_app() -> web.Application:
     return app
 
 
+async def _consume_stream(reader) -> None:
+    """Consumes lines from a reader stream in the background to prevent subprocess deadlock."""
+    try:
+        while True:
+            line = await reader.readline()
+            if not line:
+                break
+    except Exception:
+        pass
+
+
 async def _open_tunnel(port: int) -> str:
     """cloudflared orqali Cloudflare Tunnel ochish (bepul HTTPS).
 
@@ -253,6 +264,8 @@ async def _open_tunnel(port: int) -> str:
                         # trycloudflare.com URL
                         url_match = re.search(r"(https://[^\s]+\.trycloudflare\.com)", decoded)
                         if url_match:
+                            # Start background task to consume remaining stdout and prevent pipe buffer deadlock
+                            asyncio.create_task(_consume_stream(_tunnel_process.stdout))
                             return url_match.group(1)
                 except asyncio.TimeoutError:
                     continue
