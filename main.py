@@ -1016,8 +1016,10 @@ async def handle_link(message: types.Message, state: FSMContext) -> None:
                     current_symbol=link["current_symbol"]
                 )
 
-        # Footer
-        now: str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        # Footer (Toshkent vaqti UTC+5)
+        from datetime import timedelta
+        uzt_tz = timezone(timedelta(hours=5))
+        now: str = datetime.now(uzt_tz).strftime("%Y-%m-%d %H:%M (UTC+5)")
         report += t("result_footer", lang, timestamp=now)
 
         # Word hisoboti yaratish
