@@ -11,7 +11,7 @@ from services import safe_request, DEFAULT_TIMEOUT
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-_BASE_URL: str = "https://api.etherscan.io/api"
+_BASE_URL: str = "https://api.etherscan.io/v2/api"
 _WEI_DIVISOR: int = 10**18
 
 ProgressCb = Callable[..., Awaitable[None]]
@@ -39,6 +39,7 @@ async def get_eth_balance(
             resp = await safe_request(
                 client, "GET", _BASE_URL,
                 params={
+                    "chainid": "1",
                     "module": "account",
                     "action": "balance",
                     "address": address,
@@ -60,6 +61,7 @@ async def get_eth_balance(
                 resp = await safe_request(
                     client, "GET", _BASE_URL,
                     params={
+                        "chainid": "1",
                         "module": "account",
                         "action": "txlist",
                         "address": address,
@@ -128,6 +130,7 @@ async def get_eth_balance(
                 resp = await safe_request(
                     client, "GET", _BASE_URL,
                     params={
+                        "chainid": "1",
                         "module": "account",
                         "action": "tokentx",
                         "address": address,
