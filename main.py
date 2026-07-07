@@ -165,6 +165,18 @@ def language_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
+def get_webapp_url() -> str:
+    """Tizim uchun Web App URL ni yaratish (serveo tunnel bilan)."""
+    import time
+    import web_server
+    api_url = getattr(web_server, "_tunnel_url", "")
+    base_url: str = WEBAPP_URL.rstrip("/") + "/index.html"
+    cache_buster = int(time.time())
+    if api_url:
+        return f"{base_url}?v={cache_buster}&api={api_url}"
+    return f"{base_url}?v={cache_buster}"
+
+
 def main_menu_keyboard(lang: str, is_user_admin: bool = False) -> ReplyKeyboardMarkup:
     """Foydalanuvchi uchun asosiy menyu tugmalari (ReplyKeyboard)."""
     btn_help = {
@@ -202,6 +214,12 @@ def main_menu_keyboard(lang: str, is_user_admin: bool = False) -> ReplyKeyboardM
         "ru": "⚙️ Админ Панель",
         "en": "⚙️ Admin Panel"
     }.get(lang, "⚙️ Admin Panel")
+
+    btn_web = {
+        "uz": "🌐 Web Panel",
+        "ru": "🌐 Веб Панель",
+        "en": "🌐 Web Panel"
+    }.get(lang, "🌐 Web Panel")
     
     keyboard_buttons = [
         [KeyboardButton(text=btn_help), KeyboardButton(text=btn_risk)],
@@ -210,7 +228,11 @@ def main_menu_keyboard(lang: str, is_user_admin: bool = False) -> ReplyKeyboardM
     ]
     
     if is_user_admin:
-        keyboard_buttons.append([KeyboardButton(text=btn_admin)])
+        url = get_webapp_url()
+        keyboard_buttons.append([
+            KeyboardButton(text=btn_admin),
+            KeyboardButton(text=btn_web, web_app=WebAppInfo(url=url))
+        ])
         
     return ReplyKeyboardMarkup(
         keyboard=keyboard_buttons,
@@ -755,11 +777,6 @@ async def cmd_audits(message: types.Message) -> None:
 @dp.message(Command("web"))
 async def cmd_web(message: types.Message) -> None:
     """Admin panel — Telegram Mini App ochish (GitHub Pages)."""
-    # Clear any old persistent reply keyboards
-    from aiogram.types import ReplyKeyboardRemove
-    clear_msg = await message.answer("🔄", reply_markup=ReplyKeyboardRemove())
-    await clear_msg.delete()
-
     user = get_user(message.from_user.id)
     if not user:
         await message.answer(t("not_registered", "uz"), parse_mode=ParseMode.MARKDOWN)
@@ -779,21 +796,8 @@ async def cmd_web(message: types.Message) -> None:
         )
         return
 
-    # API tunnel URL ni olish
-    import time
-    import web_server
-    api_url = getattr(web_server, "_tunnel_url", "")
-
-    base_url: str = WEBAPP_URL.rstrip("/") + "/index.html"
-    cache_buster = int(time.time())
-
-    # URL ga faqat api= parametrini qo'shamiz.
-    # Barcha ma'lumotlar (foydalanuvchilar, auditlar) webapp ochilganda
-    # API orqali to'liq yuklanadi — foydalanuvchilar soni cheklanmaydi.
-    if api_url:
-        webapp_url: str = f"{base_url}?v={cache_buster}&api={api_url}"
-    else:
-        webapp_url: str = f"{base_url}?v={cache_buster}"
+    # WebApp URL olish
+    webapp_url = get_webapp_url()
 
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
