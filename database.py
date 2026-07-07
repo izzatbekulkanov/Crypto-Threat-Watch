@@ -256,38 +256,25 @@ def log_audit(user_id: int, network: str, address: str, summary: str, risk_level
 
 
 def log_audit_transactions(audit_id: int, source_wallet: str, transactions: list[dict]) -> None:
-    """Audit qilingan hamyon tranzaksiyalarini unikal kontragentlar bo'yicha bazaga saqlash.
+    """Audit qilingan hamyonning barcha tranzaksiyalarini to'liq aniqlik bilan bazaga saqlash.
     
-    Har bir unikal kontragent uchun faqat eng oxirgi (yangisi) saqlanadi, bu esa baza hajmini 
-    katta miqdorda tejaydi. Shuningdek, 30 kundan eski batafsil loglar tozalanadi.
+    Tergov va kiberxavfsizlik ishlari uchun 100% aniqlikni ta'minlaydi.
+    30 kundan eski yozuvlar bazani to'lib ketishidan saqlash uchun tozalanadi.
     """
     conn = _get_connection()
     
-    # 1. Tranzaksiyalarni kontragent bo'yicha unikal qilish (vaqt bo'yicha eng yangisini saqlash)
-    unique_txs = {}
-    for tx in transactions:
-        cp = tx.get("counterparty")
-        if not cp:
-            continue
-        cp_lower = cp.lower()
-        ts = tx.get("timestamp", 0.0)
-        
-        # Agar bu kontragent hali yo'q bo'lsa yoki yangi tranzaksiyaning vaqti kattaroq bo'lsa
-        if cp_lower not in unique_txs or ts > unique_txs[cp_lower].get("timestamp", 0.0):
-            unique_txs[cp_lower] = tx
-
-    # Bulk insert uchun ma'lumotlarni yig'ish
+    # Barcha tranzaksiyalarni guruhlamasdan to'liq yozamiz
     data = [
         (
             audit_id,
             source_wallet.lower(),
-            cp_addr,
+            tx.get("counterparty", "").lower(),
             tx.get("direction", "in").lower(),
             tx.get("amount", 0.0),
             tx.get("symbol", ""),
             tx.get("timestamp", 0.0)
         )
-        for cp_addr, tx in unique_txs.items()
+        for tx in transactions if tx.get("counterparty")
     ]
     
     if data:
@@ -296,8 +283,7 @@ def log_audit_transactions(audit_id: int, source_wallet: str, transactions: list
             data
         )
     
-    # 2. Avtomatik tozalash (Pruning): 30 kundan (2592000 soniya) eski tranzaksiya tafsilotlarini o'chirish
-    # Bu faqat audit_transactions jadvalidan o'chiradi, umumiy audit logs (audit_logs) o'chmaydi.
+    # 30 kundan eski batafsil tranzaksiya loglarini o'chirish (avtomatik tozalash)
     thirty_days_ago = time.time() - (30 * 24 * 60 * 60)
     conn.execute(
         "DELETE FROM audit_transactions WHERE timestamp < ?",
