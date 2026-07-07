@@ -230,8 +230,11 @@ async def _consume_stream(reader) -> None:
             line = await reader.readline()
             if not line:
                 break
-    except Exception:
-        pass
+            decoded = line.decode("utf-8", errors="ignore").strip()
+            if decoded:
+                logger.info(f"Tunnel log: {decoded}")
+    except Exception as e:
+        logger.warning(f"Error consuming stream: {e}")
 
 
 async def _open_tunnel(port: int) -> str:
@@ -246,6 +249,7 @@ async def _open_tunnel(port: int) -> str:
         _tunnel_process = await asyncio.create_subprocess_exec(
             "/usr/local/bin/cloudflared",
             "tunnel",
+            "--protocol", "http2",
             "--url", f"http://localhost:{port}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
