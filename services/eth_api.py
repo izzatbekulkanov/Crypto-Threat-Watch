@@ -31,9 +31,10 @@ async def fetch_chain_data(
     api_key: str,
     address: str,
     is_etherscan_v2: bool = False,
+    is_blockscout: bool = False,
 ) -> dict:
     """Belgilangan EVM tarmog'idan balans, tranzaksiyalar va token o'tkazmalarini oladi."""
-    if not api_key:
+    if not is_blockscout and not api_key:
         logger.info(f"Skipping {chain_name} query: API key not configured in .env.")
         return {"balance": 0.0, "transfers": []}
 
@@ -48,10 +49,14 @@ async def fetch_chain_data(
             "action": "balance",
             "address": address,
             "tag": "latest",
-            "apikey": api_key,
         }
+        if api_key and not is_blockscout:
+            params["apikey"] = api_key
         if is_etherscan_v2:
-            params["chainid"] = "1"
+            if chain_name == "Ethereum":
+                params["chainid"] = "1"
+            elif chain_name == "BSC":
+                params["chainid"] = "56"
         
         resp = await safe_request(client, "GET", base_url, params=params)
         balance_data = resp.json()
@@ -59,7 +64,6 @@ async def fetch_chain_data(
         if result_str and result_str.isdigit():
             balance = int(result_str) / (10**18)
         else:
-            # check if the result carries a message
             err_msg = balance_data.get("result", "")
             if "Free API access" in str(err_msg) or "NOTOK" in str(balance_data.get("message", "")):
                 logger.warning(f"{chain_name} balance API returned warning: {balance_data}")
@@ -77,10 +81,14 @@ async def fetch_chain_data(
             "sort": "desc",
             "offset": "1000",
             "page": "1",
-            "apikey": api_key,
         }
+        if api_key and not is_blockscout:
+            params["apikey"] = api_key
         if is_etherscan_v2:
-            params["chainid"] = "1"
+            if chain_name == "Ethereum":
+                params["chainid"] = "1"
+            elif chain_name == "BSC":
+                params["chainid"] = "56"
         
         resp = await safe_request(client, "GET", base_url, params=params)
         data = resp.json()
@@ -137,10 +145,14 @@ async def fetch_chain_data(
             "sort": "desc",
             "offset": "1000",
             "page": "1",
-            "apikey": api_key,
         }
+        if api_key and not is_blockscout:
+            params["apikey"] = api_key
         if is_etherscan_v2:
-            params["chainid"] = "1"
+            if chain_name == "Ethereum":
+                params["chainid"] = "1"
+            elif chain_name == "BSC":
+                params["chainid"] = "56"
 
         resp = await safe_request(client, "GET", base_url, params=params)
         data = resp.json()
@@ -203,7 +215,7 @@ async def get_eth_balance(
         # Tarmoqlar so'rovlarini parallel ravishda ishga tushiramiz
         tasks = []
         
-        # 1. Ethereum Mainnet
+        # 1. Ethereum Mainnet (Etherscan V2 - bepul API kalit bilan ishlaydi)
         tasks.append(fetch_chain_data(
             client=client,
             chain_name="Ethereum",
@@ -213,41 +225,69 @@ async def get_eth_balance(
             is_etherscan_v2=True
         ))
 
-        # 2. BSC (BNB Smart Chain)
-        tasks.append(fetch_chain_data(
-            client=client,
-            chain_name="BSC",
-            base_url="https://api.bscscan.com/api",
-            api_key=BSCSCAN_API_KEY,
-            address=address
-        ))
+        # 2. BSC (Etherscan V2 - faqat pullik tarifda bepul skanerlaydi, agar kalit sozlangan bo'lsa)
+        if BSCSCAN_API_KEY:
+            tasks.append(fetch_chain_data(
+                client=client,
+                chain_name="BSC",
+                base_url="https://api.etherscan.io/v2/api",
+                api_key=BSCSCAN_API_KEY,
+                address=address,
+                is_etherscan_v2=True
+            ))
+        else:
+            logger.info("BSC scanning skipped: BSCSCAN_API_KEY is not configured in .env.")
 
-        # 3. Polygon
+        # 3. Polygon (Blockscout - 100% BEPUL, API kalit talab etilmaydi!)
         tasks.append(fetch_chain_data(
             client=client,
             chain_name="Polygon",
-            base_url="https://api.polygonscan.com/api",
-            api_key=POLYGONSCAN_API_KEY,
-            address=address
+            base_url="https://polygon.blockscout.com/api",
+            api_key="",
+            address=address,
+            is_blockscout=True
         ))
 
-        # 4. Base
+        # 4. Base (Blockscout - 100% BEPUL, API kalit talab etilmaydi!)
         tasks.append(fetch_chain_data(
             client=client,
             chain_name="Base",
-            base_url="https://api.basescan.org/api",
-            api_key=BASESCAN_API_KEY,
-            address=address
+            base_url="https://base.blockscout.com/api",
+            api_key="",
+            address=address,
+            is_blockscout=True
         ))
 
         await cb("progress_txns", 30)
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
     # Natijalarni tahlil qilish
-    eth_result = results[0] if not isinstance(results[0], Exception) else {"balance": 0.0, "transfers": []}
-    bsc_result = results[1] if len(results) > 1 and not isinstance(results[1], Exception) else {"balance": 0.0, "transfers": []}
-    poly_result = results[2] if len(results) > 2 and not isinstance(results[2], Exception) else {"balance": 0.0, "transfers": []}
-    base_result = results[3] if len(results) > 3 and not isinstance(results[3], Exception) else {"balance": 0.0, "transfers": []}
+    eth_result = {"balance": 0.0, "transfers": []}
+    bsc_result = {"balance": 0.0, "transfers": []}
+    poly_result = {"balance": 0.0, "transfers": []}
+    base_result = {"balance": 0.0, "transfers": []}
+
+    idx = 0
+    # Ethereum always exists in tasks
+    if idx < len(results) and not isinstance(results[idx], Exception):
+        eth_result = results[idx]
+    idx += 1
+
+    # BSC exists only if BSCSCAN_API_KEY is configured
+    if BSCSCAN_API_KEY:
+        if idx < len(results) and not isinstance(results[idx], Exception):
+            bsc_result = results[idx]
+        idx += 1
+
+    # Polygon always exists
+    if idx < len(results) and not isinstance(results[idx], Exception):
+        poly_result = results[idx]
+    idx += 1
+
+    # Base always exists
+    if idx < len(results) and not isinstance(results[idx], Exception):
+        base_result = results[idx]
+    idx += 1
 
     # Balanslar
     eth_balance = eth_result.get("balance", 0.0)
