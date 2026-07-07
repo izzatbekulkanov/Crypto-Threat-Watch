@@ -256,27 +256,55 @@ def log_audit(user_id: int, network: str, address: str, summary: str, risk_level
 
 
 def log_audit_transactions(audit_id: int, source_wallet: str, transactions: list[dict]) -> None:
-    """Audit qilingan hamyon tranzaksiyalarini bazaga saqlash."""
+    """Audit qilingan hamyon tranzaksiyalarini unikal kontragentlar bo'yicha bazaga saqlash.
+    
+    Har bir unikal kontragent uchun faqat eng oxirgi (yangisi) saqlanadi, bu esa baza hajmini 
+    katta miqdorda tejaydi. Shuningdek, 30 kundan eski batafsil loglar tozalanadi.
+    """
     conn = _get_connection()
-    # bulk insert
+    
+    # 1. Tranzaksiyalarni kontragent bo'yicha unikal qilish (vaqt bo'yicha eng yangisini saqlash)
+    unique_txs = {}
+    for tx in transactions:
+        cp = tx.get("counterparty")
+        if not cp:
+            continue
+        cp_lower = cp.lower()
+        ts = tx.get("timestamp", 0.0)
+        
+        # Agar bu kontragent hali yo'q bo'lsa yoki yangi tranzaksiyaning vaqti kattaroq bo'lsa
+        if cp_lower not in unique_txs or ts > unique_txs[cp_lower].get("timestamp", 0.0):
+            unique_txs[cp_lower] = tx
+
+    # Bulk insert uchun ma'lumotlarni yig'ish
     data = [
         (
             audit_id,
             source_wallet.lower(),
-            tx.get("counterparty", "").lower(),
+            cp_addr,
             tx.get("direction", "in").lower(),
             tx.get("amount", 0.0),
             tx.get("symbol", ""),
             tx.get("timestamp", 0.0)
         )
-        for tx in transactions if tx.get("counterparty")
+        for cp_addr, tx in unique_txs.items()
     ]
+    
     if data:
         conn.executemany(
             "INSERT INTO audit_transactions (audit_id, source_wallet, counterparty, direction, amount, symbol, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
             data
         )
-        conn.commit()
+    
+    # 2. Avtomatik tozalash (Pruning): 30 kundan (2592000 soniya) eski tranzaksiya tafsilotlarini o'chirish
+    # Bu faqat audit_transactions jadvalidan o'chiradi, umumiy audit logs (audit_logs) o'chmaydi.
+    thirty_days_ago = time.time() - (30 * 24 * 60 * 60)
+    conn.execute(
+        "DELETE FROM audit_transactions WHERE timestamp < ?",
+        (thirty_days_ago,)
+    )
+    
+    conn.commit()
     conn.close()
 
 
