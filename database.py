@@ -267,8 +267,8 @@ def log_audit_transactions(audit_id: int, source_wallet: str, transactions: list
     data = [
         (
             audit_id,
-            source_wallet.lower(),
-            tx.get("counterparty", "").lower(),
+            source_wallet,
+            tx.get("counterparty", ""),
             tx.get("direction", "in").lower(),
             tx.get("amount", 0.0),
             tx.get("symbol", ""),
@@ -314,7 +314,7 @@ def find_common_counterparties(current_wallet: str) -> list[dict]:
         WHERE t1.source_wallet = ? AND t2.source_wallet != ?
         ORDER BY t2.timestamp DESC
     """
-    rows = conn.execute(query, (current_wallet.lower(), current_wallet.lower())).fetchall()
+    rows = conn.execute(query, (current_wallet, current_wallet)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 

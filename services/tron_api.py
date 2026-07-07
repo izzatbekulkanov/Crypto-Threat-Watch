@@ -3,6 +3,7 @@
 import httpx
 import logging
 import asyncio
+from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from config import TRONGRID_API_KEY
@@ -25,31 +26,11 @@ async def get_tron_usdt_balance(
     address: str,
     progress: ProgressCb | None = None,
 ) -> dict:
-    """TRON hamyon to'liq professional audit.
-
-    - Hozirgi TRX balansi (real-time)
-    - TRX kirim/chiqim
-    - USDT (TRC-20) kirim/chiqim
-    - Boshqa TRC-20 tokenlar bo'yicha guruhlash
-    - Jami tranzaksiyalar hajmi
-    - Tranzaksiyalar soni
-
-    Args:
-        address: TRON hamyon manzili (T...).
-
-    Returns:
-        To'liq audit natijasi.
-    """
+    """TRON hamyon to'liq professional audit."""
     cb: ProgressCb = progress or _noop_progress
 
-    trx_in: int = 0
-    trx_out: int = 0
-    trx_tx_count: int = 0
     current_trx: float = 0.0
-    yearly_stats: dict[str, dict[str, float]] = {}
-
-    # TRC-20 tokenlar
-    token_data_map: dict[str, dict[str, float]] = {}
+    transfers: list[dict] = []
 
     headers: dict[str, str] = {"TRON-PRO-API-KEY": TRONGRID_API_KEY}
 
@@ -73,11 +54,11 @@ async def get_tron_usdt_balance(
         try:
             fingerprint = None
             page_idx = 0
-            for _ in range(50): # Max 10,000 txs
+            for _ in range(50):  # Max 10,000 txs
                 params = {"only_confirmed": "true", "limit": "200"}
                 if fingerprint:
                     params["fingerprint"] = fingerprint
-                    
+
                 resp = await safe_request(
                     client, "GET",
                     f"{_BASE_URL}/v1/accounts/{address}/transactions",
@@ -86,20 +67,14 @@ async def get_tron_usdt_balance(
                 )
                 trx_data: dict = resp.json()
                 trx_txs: list[dict] = trx_data.get("data", [])
-                
+
                 if not trx_txs:
                     break
-                    
-                trx_tx_count += len(trx_txs)
 
                 for tx in trx_txs:
-                    tx_time = tx.get("block_timestamp", 0)
-                    year = "Unknown"
-                    if tx_time:
-                        from datetime import datetime, timezone
-                        year = str(datetime.fromtimestamp(tx_time / 1000, tz=timezone.utc).year)
-                    if year not in yearly_stats:
-                        yearly_stats[year] = {"in": 0.0, "out": 0.0}
+                    tx_time_ms = tx.get("block_timestamp", 0)
+                    tx_time = int(tx_time_ms / 1000)
+                    tx_hash = tx.get("txID", "")
 
                     raw_data: dict = tx.get("raw_data", {})
                     contracts: list = raw_data.get("contract", [])
@@ -110,35 +85,50 @@ async def get_tron_usdt_balance(
                             to_addr: str = param.get("to_address", "")
                             owner_addr: str = param.get("owner_address", "")
 
+                            # Self-transfer hisobga olinmaydi
+                            if _is_same_address(to_addr, address) and _is_same_address(owner_addr, address):
+                                continue
+
                             if _is_same_address(to_addr, address):
-                                trx_in += amount
-                                yearly_stats[year]["in"] += amount / _TRX_DIVISOR
-                            if _is_same_address(owner_addr, address):
-                                trx_out += amount
-                                yearly_stats[year]["out"] += amount / _TRX_DIVISOR
-                                
+                                transfers.append({
+                                    "tx_hash": tx_hash,
+                                    "timestamp": tx_time,
+                                    "symbol": "TRX",
+                                    "amount": amount / _TRX_DIVISOR,
+                                    "direction": "in",
+                                    "counterparty": owner_addr
+                                })
+                            elif _is_same_address(owner_addr, address):
+                                transfers.append({
+                                    "tx_hash": tx_hash,
+                                    "timestamp": tx_time,
+                                    "symbol": "TRX",
+                                    "amount": amount / _TRX_DIVISOR,
+                                    "direction": "out",
+                                    "counterparty": to_addr
+                                })
+
                 fingerprint = trx_data.get("meta", {}).get("fingerprint")
                 if not fingerprint:
                     break
 
                 page_idx += 1
                 pct = min(50, 15 + page_idx * 3)
-                await cb("progress_txns", pct, count=trx_tx_count)
+                await cb("progress_txns", pct, count=len(transfers))
                 await asyncio.sleep(0.5)
         except Exception as e:
             logger.warning(f"TRON TRX transactions error: {e}")
 
-        # 3. TRC-20 token tranzaksiyalari (yillar kesimida)
+        # 3. TRC-20 token tranzaksiyalari
         await cb("progress_tokens", 55)
         try:
-            address_lower: str = address.lower()
             fingerprint = None
             trc_page_idx = 0
             for _ in range(50):
                 params = {"only_confirmed": "true", "limit": "200"}
                 if fingerprint:
                     params["fingerprint"] = fingerprint
-                    
+
                 resp = await safe_request(
                     client, "GET",
                     f"{_BASE_URL}/v1/accounts/{address}/transactions/trc20",
@@ -160,18 +150,35 @@ async def get_tron_usdt_balance(
                     symbol: str = token_info.get("symbol", "UNKNOWN")
                     decimals: int = int(token_info.get("decimals", "6"))
                     token_value: float = value / (10 ** decimals)
+                    tx_time_ms = tx.get("block_timestamp", 0)
+                    tx_time = int(tx_time_ms / 1000)
+                    tx_hash = tx.get("transaction_id", "")
 
-                    if symbol not in token_data_map:
-                        token_data_map[symbol] = {"income": 0.0, "outcome": 0.0}
+                    to_addr_str: str = tx.get("to", "")
+                    from_addr_str: str = tx.get("from", "")
 
-                    to_addr_str: str = tx.get("to", "").lower()
-                    from_addr_str: str = tx.get("from", "").lower()
+                    if to_addr_str == address and from_addr_str == address:
+                        continue
 
-                    if to_addr_str == address_lower:
-                        token_data_map[symbol]["income"] += token_value
-                    if from_addr_str == address_lower:
-                        token_data_map[symbol]["outcome"] += token_value
-                        
+                    if to_addr_str == address:
+                        transfers.append({
+                            "tx_hash": tx_hash,
+                            "timestamp": tx_time,
+                            "symbol": symbol,
+                            "amount": token_value,
+                            "direction": "in",
+                            "counterparty": from_addr_str
+                        })
+                    elif from_addr_str == address:
+                        transfers.append({
+                            "tx_hash": tx_hash,
+                            "timestamp": tx_time,
+                            "symbol": symbol,
+                            "amount": token_value,
+                            "direction": "out",
+                            "counterparty": to_addr_str
+                        })
+
                 fingerprint = trc20_data.get("meta", {}).get("fingerprint")
                 if not fingerprint:
                     break
@@ -184,62 +191,98 @@ async def get_tron_usdt_balance(
 
     await cb("progress_finalizing", 98)
 
-    # Hisoblash
-    income_trx: float = trx_in / _TRX_DIVISOR
-    outcome_trx: float = trx_out / _TRX_DIVISOR
-    volume_trx: float = income_trx + outcome_trx
+    # ═══ 4. Swaplarni aniqlash va ajratish ═══
+    from utils import process_transfers_and_detect_swaps
+    normal_transfers, swaps = process_transfers_and_detect_swaps(transfers)
 
-    # USDT ni asosiy ko'rsatkich sifatida olish
-    usdt_data: dict[str, float] = token_data_map.get("USDT", {"income": 0.0, "outcome": 0.0})
-    usdt_income: float = usdt_data["income"]
-    usdt_outcome: float = usdt_data["outcome"]
-    usdt_volume: float = usdt_income + usdt_outcome
+    # ═══ 5. Aktivlar statistikasini hisoblash ═══
+    token_stats: dict[str, dict] = {}
+    for t in normal_transfers:
+        sym = t["symbol"]
+        if sym not in token_stats:
+            token_stats[sym] = {"income": 0.0, "outcome": 0.0, "tx_count": 0}
+        token_stats[sym]["tx_count"] += 1
+        if t["direction"] == "in":
+            token_stats[sym]["income"] += t["amount"]
+        else:
+            token_stats[sym]["outcome"] += t["amount"]
 
-    # Token guruhlash
-    tokens: list[dict[str, str]] = []
+    # Yillik statistika (faqat normal native TRX uchun)
+    yearly_stats: dict[str, dict[str, float]] = {}
+    for t in normal_transfers:
+        if t["symbol"] == "TRX":
+            year = "Unknown"
+            if t["timestamp"]:
+                year = str(datetime.fromtimestamp(t["timestamp"], tz=timezone.utc).year)
+            if year not in yearly_stats:
+                yearly_stats[year] = {"in": 0.0, "out": 0.0}
+            if t["direction"] == "in":
+                yearly_stats[year]["in"] += t["amount"]
+            else:
+                yearly_stats[year]["out"] += t["amount"]
 
-    # TRX birinchi
-    tokens.append({
+    # TRX (Native) statistikalari
+    trx_s = token_stats.get("TRX", {"income": 0.0, "outcome": 0.0, "tx_count": 0})
+    income_trx = trx_s["income"]
+    outcome_trx = trx_s["outcome"]
+    volume_trx = income_trx + outcome_trx
+
+    assets: list[dict] = []
+    assets.append({
         "symbol": "TRX",
-        "current_balance": f"{current_trx:,.4f}",
-        "income": f"{income_trx:,.4f}",
-        "outcome": f"{outcome_trx:,.4f}",
-        "net": f"{income_trx - outcome_trx:,.4f}",
-        "volume": f"{volume_trx:,.4f}",
+        "is_native": True,
+        "balance": f"{current_trx:,.4f} TRX",
+        "income": f"{income_trx:,.4f} TRX",
+        "outcome": f"{outcome_trx:,.4f} TRX",
+        "net": f"{income_trx - outcome_trx:,.4f} TRX",
+        "volume": f"{volume_trx:,.4f} TRX",
+        "tx_count": trx_s["tx_count"],
     })
 
-    # Boshqa tokenlar
-    for symbol in sorted(token_data_map.keys()):
-        inc: float = token_data_map[symbol]["income"]
-        out: float = token_data_map[symbol]["outcome"]
-        vol: float = inc + out
-        net: float = inc - out
-
-        if vol < 0.001:
+    # TRC-20 tokenlar statistikalari
+    for symbol in sorted(token_stats.keys()):
+        if symbol == "TRX":
             continue
 
-        tokens.append({
+        j_stats = token_stats[symbol]
+        j_income = j_stats["income"]
+        j_outcome = j_stats["outcome"]
+        j_volume = j_income + j_outcome
+        j_net = j_income - j_outcome
+        j_tx_count = j_stats["tx_count"]
+
+        est_balance = max(0.0, j_net)
+
+        assets.append({
             "symbol": symbol,
-            "current_balance": "—",
-            "income": f"{inc:,.4f}",
-            "outcome": f"{out:,.4f}",
-            "net": f"{net:,.4f}",
-            "volume": f"{vol:,.4f}",
+            "is_native": False,
+            "balance": f"{est_balance:,.4f} {symbol}",
+            "income": f"{j_income:,.4f} {symbol}",
+            "outcome": f"{j_outcome:,.4f} {symbol}",
+            "net": f"{j_net:,.4f} {symbol}",
+            "volume": f"{j_volume:,.4f} {symbol}",
+            "tx_count": j_tx_count,
         })
 
-    # Asosiy ko'rsatkich — USDT bo'lsa USDT, bo'lmasa TRX
+    # Asosiy ko'rsatkichlar (Dinamik tanlash, moslik uchun)
+    usdt_stats = token_stats.get("USDT", {"income": 0.0, "outcome": 0.0, "tx_count": 0})
+    usdt_income = usdt_stats["income"]
+    usdt_outcome = usdt_stats["outcome"]
+    usdt_volume = usdt_income + usdt_outcome
+
     if usdt_volume > 0:
-        main_income: str = f"{usdt_income:,.4f} USDT"
-        main_outcome: str = f"{usdt_outcome:,.4f} USDT"
-        main_net: str = f"{usdt_income - usdt_outcome:,.4f} USDT"
-        main_volume: str = f"{usdt_volume:,.4f} USDT"
+        main_income = f"{usdt_income:,.4f} USDT"
+        main_outcome = f"{usdt_outcome:,.4f} USDT"
+        main_net = f"{usdt_income - usdt_outcome:,.4f} USDT"
+        main_volume = f"{usdt_volume:,.4f} USDT"
     else:
         main_income = f"{income_trx:,.4f} TRX"
         main_outcome = f"{outcome_trx:,.4f} TRX"
         main_net = f"{income_trx - outcome_trx:,.4f} TRX"
         main_volume = f"{volume_trx:,.4f} TRX"
 
-    total_tx: int = trx_tx_count + len(token_data_map.get("USDT", {}).keys())
+    grand_tx_count = len(normal_transfers)
+    asset_count = len(assets)
 
     return {
         "network": "TRON",
@@ -249,9 +292,14 @@ async def get_tron_usdt_balance(
         "total_outcome": main_outcome,
         "net_balance": main_net,
         "total_volume": main_volume,
-        "tx_count": total_tx,
-        "tokens": tokens,
+        "tx_count": grand_tx_count,
+        "assets": assets,
+        "grand_tx_count": grand_tx_count,
+        "asset_count": asset_count,
         "yearly_stats": yearly_stats,
+        "swaps": swaps,
+        "normal_transfers": normal_transfers,
+        "tokens": [a for a in assets if not a["is_native"]],
     }
 
 
