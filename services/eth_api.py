@@ -199,6 +199,124 @@ async def fetch_chain_data(
     except Exception as e:
         logger.warning(f"{chain_name} token fetch error: {e}")
 
+    # 4. ERC-721 NFT tranzaksiyalari (tokennfttx)
+    try:
+        params = {
+            "module": "account",
+            "action": "tokennfttx",
+            "address": address,
+            "startblock": "0",
+            "endblock": "99999999",
+            "sort": "desc",
+            "offset": "1000",
+            "page": "1",
+        }
+        if api_key and not is_blockscout:
+            params["apikey"] = api_key
+        if is_etherscan_v2:
+            if chain_name == "Ethereum":
+                params["chainid"] = "1"
+            elif chain_name == "BSC":
+                params["chainid"] = "56"
+
+        resp = await safe_request(client, "GET", base_url, params=params)
+        data = resp.json()
+        nft_txs = data.get("result", [])
+        if isinstance(nft_txs, list):
+            for ntx in nft_txs:
+                symbol = ntx.get("tokenSymbol") or ntx.get("tokenName") or "NFT"
+                tx_time = int(ntx.get("timeStamp", "0"))
+                tx_hash = ntx.get("hash", "")
+                sender = ntx.get("from", "").lower()
+                recipient = ntx.get("to", "").lower()
+
+                if sender == address_lower and recipient == address_lower:
+                    continue
+
+                display_symbol = f"{symbol} ({chain_name})" if chain_name != "Ethereum" else symbol
+                if recipient == address_lower:
+                    transfers.append({
+                        "tx_hash": tx_hash,
+                        "timestamp": tx_time,
+                        "symbol": display_symbol,
+                        "amount": 1.0,
+                        "direction": "in",
+                        "counterparty": sender,
+                        "chain": chain_name
+                    })
+                elif sender == address_lower:
+                    transfers.append({
+                        "tx_hash": tx_hash,
+                        "timestamp": tx_time,
+                        "symbol": display_symbol,
+                        "amount": 1.0,
+                        "direction": "out",
+                        "counterparty": recipient,
+                        "chain": chain_name
+                    })
+    except Exception as e:
+        logger.warning(f"{chain_name} ERC-721 fetch error: {e}")
+
+    # 5. ERC-1155 NFT tranzaksiyalari (token1155tx)
+    try:
+        params = {
+            "module": "account",
+            "action": "token1155tx",
+            "address": address,
+            "startblock": "0",
+            "endblock": "99999999",
+            "sort": "desc",
+            "offset": "1000",
+            "page": "1",
+        }
+        if api_key and not is_blockscout:
+            params["apikey"] = api_key
+        if is_etherscan_v2:
+            if chain_name == "Ethereum":
+                params["chainid"] = "1"
+            elif chain_name == "BSC":
+                params["chainid"] = "56"
+
+        resp = await safe_request(client, "GET", base_url, params=params)
+        data = resp.json()
+        token1155_txs = data.get("result", [])
+        if isinstance(token1155_txs, list):
+            for t1155 in token1155_txs:
+                symbol = t1155.get("tokenSymbol") or t1155.get("tokenName") or "ERC-1155"
+                val_str = t1155.get("tokenValue", "1")
+                value = float(val_str) if val_str and val_str.replace(".", "", 1).isdigit() else 1.0
+                tx_time = int(t1155.get("timeStamp", "0"))
+                tx_hash = t1155.get("hash", "")
+                sender = t1155.get("from", "").lower()
+                recipient = t1155.get("to", "").lower()
+
+                if sender == address_lower and recipient == address_lower:
+                    continue
+
+                display_symbol = f"{symbol} ({chain_name})" if chain_name != "Ethereum" else symbol
+                if recipient == address_lower:
+                    transfers.append({
+                        "tx_hash": tx_hash,
+                        "timestamp": tx_time,
+                        "symbol": display_symbol,
+                        "amount": value,
+                        "direction": "in",
+                        "counterparty": sender,
+                        "chain": chain_name
+                    })
+                elif sender == address_lower:
+                    transfers.append({
+                        "tx_hash": tx_hash,
+                        "timestamp": tx_time,
+                        "symbol": display_symbol,
+                        "amount": value,
+                        "direction": "out",
+                        "counterparty": recipient,
+                        "chain": chain_name
+                    })
+    except Exception as e:
+        logger.warning(f"{chain_name} ERC-1155 fetch error: {e}")
+
     return {"balance": balance, "transfers": transfers}
 
 
@@ -408,7 +526,7 @@ async def get_eth_balance(
             "tx_count": base_eth_s["tx_count"],
         })
 
-    # Boshqa ERC-20 tokenlar
+    # Boshqa ERC-20 va NFT tokenlar
     for symbol in sorted(token_stats.keys()):
         if symbol in ["ETH", "BNB", "MATIC", "ETH (Base)"]:
             continue
