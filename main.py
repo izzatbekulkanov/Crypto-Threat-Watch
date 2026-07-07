@@ -15,6 +15,8 @@ from aiogram.enums import ParseMode
 from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
     CallbackQuery,
     BotCommand,
     WebAppInfo,
@@ -163,6 +165,60 @@ def language_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
+def main_menu_keyboard(lang: str, is_user_admin: bool = False) -> ReplyKeyboardMarkup:
+    """Foydalanuvchi uchun asosiy menyu tugmalari (ReplyKeyboard)."""
+    btn_help = {
+        "uz": "ℹ️ Yordam",
+        "ru": "ℹ️ Помощь",
+        "en": "ℹ️ Help"
+    }.get(lang, "ℹ️ Yordam")
+    
+    btn_stats = {
+        "uz": "📊 Shaxsiy statistika",
+        "ru": "📊 Моя статистика",
+        "en": "📊 My Stats"
+    }.get(lang, "📊 Shaxsiy statistika")
+    
+    btn_history = {
+        "uz": "📜 So'rovlar tarixi",
+        "ru": "📜 История запросов",
+        "en": "📜 Query History"
+    }.get(lang, "📜 So'rovlar tarixi")
+    
+    btn_lang = {
+        "uz": "🌐 Tilni o'zgartirish",
+        "ru": "🌐 Сменить язык",
+        "en": "🌐 Change Language"
+    }.get(lang, "🌐 Tilni o'zgartirish")
+    
+    btn_risk = {
+        "uz": "🛡 Risk haqida",
+        "ru": "🛡 О рисках",
+        "en": "🛡 About Risk"
+    }.get(lang, "🛡 Risk haqida")
+    
+    btn_admin = {
+        "uz": "⚙️ Admin Panel",
+        "ru": "⚙️ Админ Панель",
+        "en": "⚙️ Admin Panel"
+    }.get(lang, "⚙️ Admin Panel")
+    
+    keyboard_buttons = [
+        [KeyboardButton(text=btn_help), KeyboardButton(text=btn_risk)],
+        [KeyboardButton(text=btn_stats), KeyboardButton(text=btn_history)],
+        [KeyboardButton(text=btn_lang)]
+    ]
+    
+    if is_user_admin:
+        keyboard_buttons.append([KeyboardButton(text=btn_admin)])
+        
+    return ReplyKeyboardMarkup(
+        keyboard=keyboard_buttons,
+        resize_keyboard=True,
+        persistent=True
+    )
+
+
 # ═══════════════════════════════════════════
 # Progress bar yaratish
 # ═══════════════════════════════════════════
@@ -251,7 +307,8 @@ async def cmd_start(message: types.Message, state: FSMContext) -> None:
 
     if user:
         lang: str = user["language"]
-        await message.answer(t("help", lang), reply_markup=ReplyKeyboardRemove(), parse_mode=ParseMode.MARKDOWN)
+        is_user_admin = is_admin(message.from_user.id)
+        await message.answer(t("help", lang), reply_markup=main_menu_keyboard(lang, is_user_admin), parse_mode=ParseMode.MARKDOWN)
         return
 
     await state.set_state(Registration.choosing_language)
@@ -397,11 +454,13 @@ async def on_approve_request(callback: CallbackQuery) -> None:
         except Exception as e:
             logger.warning(f"Admin {other_admin_id} ga bildirish yuborib bo'lmadi: {e}")
 
-    # Foydalanuvchini xabardor qilish
+    # Foydalanuvchini xabardor qilish va menyuni yuborish
     try:
+        is_target_admin = is_admin(target_user_id)
         await bot.send_message(
             chat_id=target_user_id,
             text=t("user_approved_notification", lang),
+            reply_markup=main_menu_keyboard(lang, is_target_admin),
             parse_mode=ParseMode.MARKDOWN,
         )
     except Exception as e:
@@ -468,32 +527,34 @@ async def on_reject_request(callback: CallbackQuery) -> None:
 
 
 # ═══════════════════════════════════════════
+# ═══════════════════════════════════════════
 # /help
 # ═══════════════════════════════════════════
-@dp.message(Command("help"))
+@dp.message(Command("help") | F.text.in_({"ℹ️ Yordam", "ℹ️ Помощь", "ℹ️ Help"}))
 async def cmd_help(message: types.Message) -> None:
     """Yordam."""
-    from aiogram.types import ReplyKeyboardRemove
     user = get_user(message.from_user.id)
     lang: str = user["language"] if user else "uz"
-    await message.answer(t("help", lang), reply_markup=ReplyKeyboardRemove(), parse_mode=ParseMode.MARKDOWN)
+    is_user_admin = is_admin(message.from_user.id)
+    await message.answer(t("help", lang), reply_markup=main_menu_keyboard(lang, is_user_admin), parse_mode=ParseMode.MARKDOWN)
 
 
 # ═══════════════════════════════════════════
 # /risk — Risk darajasi haqida ma'lumot
 # ═══════════════════════════════════════════
-@dp.message(Command("risk"))
+@dp.message(Command("risk") | F.text.in_({"🛡 Risk haqida", "🛡 О рисках", "🛡 About Risk"}))
 async def cmd_risk(message: types.Message) -> None:
     """Risk darajasi qanday hisoblanishi haqida batafsil ma'lumot."""
     user = get_user(message.from_user.id)
     lang: str = user["language"] if user else "uz"
-    await message.answer(t("risk_info", lang), parse_mode=ParseMode.MARKDOWN)
+    is_user_admin = is_admin(message.from_user.id)
+    await message.answer(t("risk_info", lang), reply_markup=main_menu_keyboard(lang, is_user_admin), parse_mode=ParseMode.MARKDOWN)
 
 
 # ═══════════════════════════════════════════
 # /language
 # ═══════════════════════════════════════════
-@dp.message(Command("language"))
+@dp.message(Command("language") | F.text.in_({"🌐 Tilni o'zgartirish", "🌐 Сменить язык", "🌐 Change Language"}))
 async def cmd_language(message: types.Message) -> None:
     """Tilni o'zgartirish."""
     user = get_user(message.from_user.id)
@@ -508,7 +569,7 @@ async def cmd_language(message: types.Message) -> None:
 # ═══════════════════════════════════════════
 # /mystats
 # ═══════════════════════════════════════════
-@dp.message(Command("mystats"))
+@dp.message(Command("mystats") | F.text.in_({"📊 Shaxsiy statistika", "📊 Моя статистика", "📊 My Stats"}))
 async def cmd_mystats(message: types.Message) -> None:
     """Shaxsiy statistika."""
     user = get_user(message.from_user.id)
@@ -521,8 +582,10 @@ async def cmd_mystats(message: types.Message) -> None:
     if registered and len(registered) > 10:
         registered = registered[:10]
 
+    is_user_admin = is_admin(message.from_user.id)
     await message.answer(
         t("my_stats", lang, alias=user["alias"], count=user["query_count"], registered=registered),
+        reply_markup=main_menu_keyboard(lang, is_user_admin),
         parse_mode=ParseMode.MARKDOWN,
     )
 
@@ -530,7 +593,7 @@ async def cmd_mystats(message: types.Message) -> None:
 # ═══════════════════════════════════════════
 # /history
 # ═══════════════════════════════════════════
-@dp.message(Command("history"))
+@dp.message(Command("history") | F.text.in_({"📜 So'rovlar tarixi", "📜 История запросов", "📜 Query History"}))
 async def cmd_history(message: types.Message) -> None:
     """So'rovlar tarixi."""
     user = get_user(message.from_user.id)
@@ -540,9 +603,10 @@ async def cmd_history(message: types.Message) -> None:
 
     lang: str = user["language"]
     audits = get_user_audits(message.from_user.id)
+    is_user_admin = is_admin(message.from_user.id)
 
     if not audits:
-        await message.answer(t("history_empty", lang), parse_mode=ParseMode.MARKDOWN)
+        await message.answer(t("history_empty", lang), reply_markup=main_menu_keyboard(lang, is_user_admin), parse_mode=ParseMode.MARKDOWN)
         return
 
     text: str = t("history_header", lang)
@@ -554,13 +618,13 @@ async def cmd_history(message: types.Message) -> None:
             f"   {audit['risk_level']} | {date_str}\n\n"
         )
 
-    await message.answer(text, parse_mode=ParseMode.MARKDOWN)
+    await message.answer(text, reply_markup=main_menu_keyboard(lang, is_user_admin), parse_mode=ParseMode.MARKDOWN)
 
 
 # ═══════════════════════════════════════════
 # /admin
 # ═══════════════════════════════════════════
-@dp.message(Command("admin"))
+@dp.message(Command("admin") | F.text.in_({"⚙️ Admin Panel", "⚙️ Админ Панель", "⚙️ Admin Panel"}))
 async def cmd_admin(message: types.Message, state: FSMContext) -> None:
     """Admin autentifikatsiya."""
     user = get_user(message.from_user.id)
@@ -571,7 +635,7 @@ async def cmd_admin(message: types.Message, state: FSMContext) -> None:
     lang: str = user["language"]
 
     if is_admin(message.from_user.id):
-        await message.answer(t("admin_success", lang), parse_mode=ParseMode.MARKDOWN)
+        await message.answer(t("admin_success", lang), reply_markup=main_menu_keyboard(lang, True), parse_mode=ParseMode.MARKDOWN)
         return
 
     await state.set_state(AdminAuth.waiting_for_password)
@@ -587,11 +651,12 @@ async def on_admin_password(message: types.Message, state: FSMContext) -> None:
     if message.text and message.text.strip() == ADMIN_PASSWORD:
         set_admin(message.from_user.id)
         await state.clear()
-        await message.answer(t("admin_success", lang), parse_mode=ParseMode.MARKDOWN)
+        await message.answer(t("admin_success", lang), reply_markup=main_menu_keyboard(lang, True), parse_mode=ParseMode.MARKDOWN)
         logger.info(f"Yangi admin: {message.from_user.id}")
     else:
         await state.clear()
-        await message.answer(t("admin_fail", lang), parse_mode=ParseMode.MARKDOWN)
+        is_user_admin = is_admin(message.from_user.id)
+        await message.answer(t("admin_fail", lang), reply_markup=main_menu_keyboard(lang, is_user_admin), parse_mode=ParseMode.MARKDOWN)
 
 
 # ═══════════════════════════════════════════
@@ -1096,13 +1161,6 @@ async def set_bot_commands() -> None:
     """Bot buyruqlar menyusini sozlash."""
     commands: list[BotCommand] = [
         BotCommand(command="start", description="Botni ishga tushirish"),
-        BotCommand(command="help", description="Yordam"),
-        BotCommand(command="risk", description="Risk darajasi haqida"),
-        BotCommand(command="language", description="Tilni o'zgartirish"),
-        BotCommand(command="mystats", description="Shaxsiy statistika"),
-        BotCommand(command="history", description="So'rovlar tarixi"),
-        BotCommand(command="admin", description="Admin panel"),
-        BotCommand(command="web", description="Web panel (admin)"),
     ]
     await bot.set_my_commands(commands)
 
