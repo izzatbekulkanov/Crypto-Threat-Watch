@@ -31,6 +31,11 @@ TON_API_KEY: str = _get_env("TON_API_KEY")
 ETHERSCAN_API_KEY: str = _get_env("ETHERSCAN_API_KEY")
 TRONGRID_API_KEY: str = _get_env("TRONGRID_API_KEY")
 
+# L2 API kalitlari (ixtiyoriy)
+BSCSCAN_API_KEY: str = _get_env_optional("BSCSCAN_API_KEY", "")
+POLYGONSCAN_API_KEY: str = _get_env_optional("POLYGONSCAN_API_KEY", "")
+BASESCAN_API_KEY: str = _get_env_optional("BASESCAN_API_KEY", "")
+
 # Admin paroli
 ADMIN_PASSWORD: str = _get_env_optional("ADMIN_PASSWORD", "kronos")
 

@@ -472,7 +472,7 @@ def generate_docx_report(
         h_yearly_run.font.color.rgb = COLOR_PRIMARY
         h_yearly.paragraph_format.space_after = Pt(6)
 
-        native_sym = "GRAM" if data.get("network") == "TON" else ("ETH" if data.get("network") == "ETH" else "TRX")
+        native_sym = "GRAM" if data.get("network") == "TON" else ("TRX" if data.get("network") == "TRON" else "ETH")
 
         yearly_table = doc.add_table(rows=1 + len(yearly_stats), cols=3)
         yearly_table.alignment = WD_TABLE_ALIGNMENT.CENTER
