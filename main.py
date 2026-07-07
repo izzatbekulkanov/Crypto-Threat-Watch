@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from aiogram import Bot, Dispatcher, types, F, BaseMiddleware
 from aiogram.client.default import DefaultBotProperties
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart, Command, or_f
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -530,7 +530,7 @@ async def on_reject_request(callback: CallbackQuery) -> None:
 # ═══════════════════════════════════════════
 # /help
 # ═══════════════════════════════════════════
-@dp.message(Command("help") | F.text.in_({"ℹ️ Yordam", "ℹ️ Помощь", "ℹ️ Help"}))
+@dp.message(or_f(Command("help"), F.text.in_({"ℹ️ Yordam", "ℹ️ Помощь", "ℹ️ Help"})))
 async def cmd_help(message: types.Message) -> None:
     """Yordam."""
     user = get_user(message.from_user.id)
@@ -542,7 +542,7 @@ async def cmd_help(message: types.Message) -> None:
 # ═══════════════════════════════════════════
 # /risk — Risk darajasi haqida ma'lumot
 # ═══════════════════════════════════════════
-@dp.message(Command("risk") | F.text.in_({"🛡 Risk haqida", "🛡 О рисках", "🛡 About Risk"}))
+@dp.message(or_f(Command("risk"), F.text.in_({"🛡 Risk haqida", "🛡 О рисках", "🛡 About Risk"})))
 async def cmd_risk(message: types.Message) -> None:
     """Risk darajasi qanday hisoblanishi haqida batafsil ma'lumot."""
     user = get_user(message.from_user.id)
@@ -554,7 +554,7 @@ async def cmd_risk(message: types.Message) -> None:
 # ═══════════════════════════════════════════
 # /language
 # ═══════════════════════════════════════════
-@dp.message(Command("language") | F.text.in_({"🌐 Tilni o'zgartirish", "🌐 Сменить язык", "🌐 Change Language"}))
+@dp.message(or_f(Command("language"), F.text.in_({"🌐 Tilni o'zgartirish", "🌐 Сменить язык", "🌐 Change Language"})))
 async def cmd_language(message: types.Message) -> None:
     """Tilni o'zgartirish."""
     user = get_user(message.from_user.id)
@@ -569,7 +569,7 @@ async def cmd_language(message: types.Message) -> None:
 # ═══════════════════════════════════════════
 # /mystats
 # ═══════════════════════════════════════════
-@dp.message(Command("mystats") | F.text.in_({"📊 Shaxsiy statistika", "📊 Моя статистика", "📊 My Stats"}))
+@dp.message(or_f(Command("mystats"), F.text.in_({"📊 Shaxsiy statistika", "📊 Моя статистика", "📊 My Stats"})))
 async def cmd_mystats(message: types.Message) -> None:
     """Shaxsiy statistika."""
     user = get_user(message.from_user.id)
@@ -593,7 +593,7 @@ async def cmd_mystats(message: types.Message) -> None:
 # ═══════════════════════════════════════════
 # /history
 # ═══════════════════════════════════════════
-@dp.message(Command("history") | F.text.in_({"📜 So'rovlar tarixi", "📜 История запросов", "📜 Query History"}))
+@dp.message(or_f(Command("history"), F.text.in_({"📜 So'rovlar tarixi", "📜 История запросов", "📜 Query History"})))
 async def cmd_history(message: types.Message) -> None:
     """So'rovlar tarixi."""
     user = get_user(message.from_user.id)
@@ -624,7 +624,7 @@ async def cmd_history(message: types.Message) -> None:
 # ═══════════════════════════════════════════
 # /admin
 # ═══════════════════════════════════════════
-@dp.message(Command("admin") | F.text.in_({"⚙️ Admin Panel", "⚙️ Админ Панель", "⚙️ Admin Panel"}))
+@dp.message(or_f(Command("admin"), F.text.in_({"⚙️ Admin Panel", "⚙️ Админ Панель", "⚙️ Admin Panel"})))
 async def cmd_admin(message: types.Message, state: FSMContext) -> None:
     """Admin autentifikatsiya."""
     user = get_user(message.from_user.id)
