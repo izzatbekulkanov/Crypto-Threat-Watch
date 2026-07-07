@@ -101,3 +101,53 @@ def parse_crypto_link(text: str) -> Optional[tuple[str, str]]:
         return ("TON", match.group(1))
 
     return None
+
+
+def process_transfers_and_detect_swaps(transfers: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Groups transfers by tx_hash, identifies swaps, and separates them.
+
+    A swap is defined as a transaction (same tx_hash) that contains BOTH
+    at least one outflow (direction='out') and at least one inflow (direction='in').
+
+    Args:
+        transfers: List of transfer dicts with keys:
+                   'tx_hash', 'timestamp', 'symbol', 'amount', 'direction'
+
+    Returns:
+        (normal_transfers, swaps)
+    """
+    by_hash: dict[str, list[dict]] = {}
+    for t in transfers:
+        h = t.get("tx_hash")
+        if not h:
+            continue
+        if h not in by_hash:
+            by_hash[h] = []
+        by_hash[h].append(t)
+
+    normal: list[dict] = []
+    swaps: list[dict] = []
+
+    for h, tx_transfers in by_hash.items():
+        inflows = [x for x in tx_transfers if x["direction"] == "in"]
+        outflows = [x for x in tx_transfers if x["direction"] == "out"]
+
+        # If it contains both inflow and outflow, it's a swap/exchange
+        if inflows and outflows:
+            # Format the swap details
+            from_desc = ", ".join(f"{x['amount']:,.4f} {x['symbol']}" for x in outflows)
+            to_desc = ", ".join(f"{x['amount']:,.4f} {x['symbol']}" for x in inflows)
+
+            swaps.append({
+                "tx_hash": h,
+                "timestamp": tx_transfers[0]["timestamp"],
+                "from_desc": from_desc,
+                "to_desc": to_desc,
+                "outflows": outflows,
+                "inflows": inflows
+            })
+        else:
+            normal.extend(tx_transfers)
+
+    return normal, swaps
+

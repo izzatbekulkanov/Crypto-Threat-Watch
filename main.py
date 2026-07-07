@@ -165,19 +165,22 @@ def language_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-def get_webapp_url() -> str:
-    """Tizim uchun Web App URL ni yaratish (serveo tunnel bilan)."""
+def get_webapp_url(user_id: int) -> str:
+    """Tizim uchun Web App URL ni yaratish (serveo tunnel bilan va xavfsiz token bilan)."""
     import time
+    import hmac
+    import hashlib
     import web_server
     api_url = getattr(web_server, "_tunnel_url", "")
     base_url: str = WEBAPP_URL.rstrip("/") + "/index.html"
     cache_buster = int(time.time())
+    token = hmac.new(BOT_TOKEN.encode(), str(user_id).encode(), hashlib.sha256).hexdigest()
     if api_url:
-        return f"{base_url}?v={cache_buster}&api={api_url}"
-    return f"{base_url}?v={cache_buster}"
+        return f"{base_url}?v={cache_buster}&api={api_url}&uid={user_id}&token={token}"
+    return f"{base_url}?v={cache_buster}&uid={user_id}&token={token}"
 
 
-def main_menu_keyboard(lang: str, is_user_admin: bool = False) -> ReplyKeyboardMarkup:
+def main_menu_keyboard(lang: str, is_user_admin: bool = False, user_id: Optional[int] = None) -> ReplyKeyboardMarkup:
     """Foydalanuvchi uchun asosiy menyu tugmalari (ReplyKeyboard) — Emojisiz Professional."""
     btn_help = {
         "uz": "Yordam",
@@ -227,8 +230,8 @@ def main_menu_keyboard(lang: str, is_user_admin: bool = False) -> ReplyKeyboardM
         [KeyboardButton(text=btn_lang)]
     ]
     
-    if is_user_admin:
-        url = get_webapp_url()
+    if is_user_admin and user_id:
+        url = get_webapp_url(user_id)
         keyboard_buttons.append([
             KeyboardButton(text=btn_admin),
             KeyboardButton(text=btn_web, web_app=WebAppInfo(url=url))
@@ -375,7 +378,7 @@ async def cmd_start(message: types.Message, state: FSMContext) -> None:
     if user:
         lang: str = user["language"]
         is_user_admin = is_admin(message.from_user.id)
-        await message.answer(t("help", lang), reply_markup=main_menu_keyboard(lang, is_user_admin), parse_mode=ParseMode.MARKDOWN)
+        await message.answer(t("help", lang), reply_markup=main_menu_keyboard(lang, is_user_admin, message.from_user.id), parse_mode=ParseMode.MARKDOWN)
         return
 
     await state.set_state(Registration.choosing_language)
@@ -527,7 +530,7 @@ async def on_approve_request(callback: CallbackQuery) -> None:
         await bot.send_message(
             chat_id=target_user_id,
             text=t("user_approved_notification", lang),
-            reply_markup=main_menu_keyboard(lang, is_target_admin),
+            reply_markup=main_menu_keyboard(lang, is_target_admin, target_user_id),
             parse_mode=ParseMode.MARKDOWN,
         )
     except Exception as e:
@@ -603,7 +606,7 @@ async def cmd_help(message: types.Message) -> None:
     user = get_user(message.from_user.id)
     lang: str = user["language"] if user else "uz"
     is_user_admin = is_admin(message.from_user.id)
-    await message.answer(t("help", lang), reply_markup=main_menu_keyboard(lang, is_user_admin), parse_mode=ParseMode.MARKDOWN)
+    await message.answer(t("help", lang), reply_markup=main_menu_keyboard(lang, is_user_admin, message.from_user.id), parse_mode=ParseMode.MARKDOWN)
 
 
 # ═══════════════════════════════════════════
@@ -615,7 +618,7 @@ async def cmd_risk(message: types.Message) -> None:
     user = get_user(message.from_user.id)
     lang: str = user["language"] if user else "uz"
     is_user_admin = is_admin(message.from_user.id)
-    await message.answer(t("risk_info", lang), reply_markup=main_menu_keyboard(lang, is_user_admin), parse_mode=ParseMode.MARKDOWN)
+    await message.answer(t("risk_info", lang), reply_markup=main_menu_keyboard(lang, is_user_admin, message.from_user.id), parse_mode=ParseMode.MARKDOWN)
 
 
 # ═══════════════════════════════════════════
@@ -652,7 +655,7 @@ async def cmd_mystats(message: types.Message) -> None:
     is_user_admin = is_admin(message.from_user.id)
     await message.answer(
         t("my_stats", lang, alias=user["alias"], count=user["query_count"], registered=registered),
-        reply_markup=main_menu_keyboard(lang, is_user_admin),
+        reply_markup=main_menu_keyboard(lang, is_user_admin, message.from_user.id),
         parse_mode=ParseMode.MARKDOWN,
     )
 
@@ -673,7 +676,7 @@ async def cmd_history(message: types.Message) -> None:
     is_user_admin = is_admin(message.from_user.id)
 
     if not audits:
-        await message.answer(t("history_empty", lang), reply_markup=main_menu_keyboard(lang, is_user_admin), parse_mode=ParseMode.MARKDOWN)
+        await message.answer(t("history_empty", lang), reply_markup=main_menu_keyboard(lang, is_user_admin, message.from_user.id), parse_mode=ParseMode.MARKDOWN)
         return
 
     text: str = t("history_header", lang)
@@ -685,7 +688,7 @@ async def cmd_history(message: types.Message) -> None:
             f"   {audit['risk_level']} | {date_str}\n\n"
         )
 
-    await message.answer(text, reply_markup=main_menu_keyboard(lang, is_user_admin), parse_mode=ParseMode.MARKDOWN)
+    await message.answer(text, reply_markup=main_menu_keyboard(lang, is_user_admin, message.from_user.id), parse_mode=ParseMode.MARKDOWN)
 
 
 # ═══════════════════════════════════════════
@@ -723,7 +726,7 @@ async def on_admin_password(message: types.Message, state: FSMContext) -> None:
     else:
         await state.clear()
         is_user_admin = is_admin(message.from_user.id)
-        await message.answer(t("admin_fail", lang), reply_markup=main_menu_keyboard(lang, is_user_admin), parse_mode=ParseMode.MARKDOWN)
+        await message.answer(t("admin_fail", lang), reply_markup=main_menu_keyboard(lang, is_user_admin, message.from_user.id), parse_mode=ParseMode.MARKDOWN)
 
 
 # ═══════════════════════════════════════════
@@ -862,7 +865,7 @@ async def cmd_back_to_main(message: types.Message) -> None:
         "en": "Main menu."
     }.get(lang, "Asosiy menyu.")
 
-    await message.answer(text, reply_markup=main_menu_keyboard(lang, is_user_admin), parse_mode=ParseMode.MARKDOWN)
+    await message.answer(text, reply_markup=main_menu_keyboard(lang, is_user_admin, message.from_user.id), parse_mode=ParseMode.MARKDOWN)
 
 
 # ═══════════════════════════════════════════
@@ -891,7 +894,7 @@ async def cmd_web(message: types.Message) -> None:
         return
 
     # WebApp URL olish
-    webapp_url = get_webapp_url()
+    webapp_url = get_webapp_url(message.from_user.id)
 
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     keyboard = InlineKeyboardMarkup(inline_keyboard=[

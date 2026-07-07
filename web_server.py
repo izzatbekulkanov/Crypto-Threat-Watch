@@ -174,8 +174,22 @@ async def admin_auth_middleware(request: web.Request, handler):
         return web.Response(status=200)
 
     if request.path.startswith("/api/"):
+        # 1. Telegram Init Data validation (preferred)
         init_data = request.headers.get("X-Telegram-Init-Data", "")
         user_id = verify_telegram_init_data(init_data)
+        
+        # 2. Secure Token fallback (for external browsers)
+        if not user_id:
+            admin_id_str = request.headers.get("X-Admin-Id", "")
+            admin_token = request.headers.get("X-Admin-Token", "")
+            if admin_id_str and admin_token:
+                try:
+                    admin_id = int(admin_id_str)
+                    expected_token = hmac.new(BOT_TOKEN.encode(), str(admin_id).encode(), hashlib.sha256).hexdigest()
+                    if hmac.compare_digest(expected_token, admin_token):
+                        user_id = admin_id
+                except (ValueError, TypeError):
+                    pass
         
         if not user_id or not is_admin(user_id):
             return web.json_response({"error": "Unauthorized. Admins only."}, status=403)

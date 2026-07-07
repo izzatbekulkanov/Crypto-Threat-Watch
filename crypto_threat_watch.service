@@ -1,0 +1,17 @@
+[Unit]
+Description=Crypto Threat Watch Telegram Bot and Web Server
+After=network.target
+
+[Service]
+Type=simple
+User=superadmin
+WorkingDirectory=/home/superadmin/kiberhavfsizlik/Crypto-Threat-Watch
+ExecStart=/home/superadmin/kiberhavfsizlik/Crypto-Threat-Watch/venv/bin/python main.py
+Restart=always
+RestartSec=5
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=crypto-bot
+
+[Install]
+WantedBy=multi-user.target

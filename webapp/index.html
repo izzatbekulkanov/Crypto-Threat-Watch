@@ -1382,7 +1382,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-Telegram-Init-Data': initData
+                        ...getApiHeaders()
                     },
                     body: JSON.stringify({ message: messageVal })
                 });
@@ -1489,7 +1489,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-Telegram-Init-Data': initData
+                        ...getApiHeaders()
                     },
                     body: JSON.stringify(payload)
                 });
@@ -1566,11 +1566,22 @@
             });
         }
 
+        function getApiHeaders() {
+            const params = new URLSearchParams(window.location.search);
+            const uid = params.get('uid') || '';
+            const token = params.get('token') || '';
+            const initData = window.Telegram?.WebApp?.initData || '';
+            return {
+                'X-Telegram-Init-Data': initData,
+                'X-Admin-Id': uid,
+                'X-Admin-Token': token
+            };
+        }
+
         // ═══ Data Loader (Hybrid url param + API fallback) ═══
         async function fetchLiveData(apiBase) {
             try {
-                const initData = window.Telegram?.WebApp?.initData || '';
-                const headers = { 'X-Telegram-Init-Data': initData };
+                const headers = getApiHeaders();
 
                 const [sr, ur, ar] = await Promise.all([
                     fetch(apiBase + '/api/stats', { headers }),
@@ -1578,26 +1589,42 @@
                     fetch(apiBase + '/api/audits', { headers })
                 ]);
 
-                if (sr.ok && ur.ok && ar.ok) {
-                    appData = {
-                        stats: await sr.json(),
-                        users: await ur.json(),
-                        audits: await ar.json()
-                    };
-                    renderAll();
-                    
-                    // Dynamically refresh active profile sheet if open
-                    if (activeTargetUserId && document.getElementById('dlg-profile-overlay').classList.contains('active')) {
-                        const userStillExists = appData.users.some(u => (u.user_id === activeTargetUserId || u.id === activeTargetUserId));
-                        if (userStillExists) {
-                            openProfileSheet(activeTargetUserId);
-                        } else {
-                            closeProfileSheet();
-                        }
+                if (!sr.ok || !ur.ok || !ar.ok) {
+                    let errMessage = "Server returned error: ";
+                    if (sr.status === 403 || ur.status === 403 || ar.status === 403) {
+                        errMessage = "Kirish taqiqlandi (403): Ushbu sahifa faqat adminlar uchun. Iltimos, Telegram orqali kiring.";
+                    } else {
+                        errMessage += `Stats: ${sr.status}, Users: ${ur.status}, Audits: ${ar.status}`;
+                    }
+                    throw new Error(errMessage);
+                }
+
+                appData = {
+                    stats: await sr.json(),
+                    users: await ur.json(),
+                    audits: await ar.json()
+                };
+                renderAll();
+                
+                // Dynamically refresh active profile sheet if open
+                if (activeTargetUserId && document.getElementById('dlg-profile-overlay').classList.contains('active')) {
+                    const userStillExists = appData.users.some(u => (u.user_id === activeTargetUserId || u.id === activeTargetUserId));
+                    if (userStillExists) {
+                        openProfileSheet(activeTargetUserId);
+                    } else {
+                        closeProfileSheet();
                     }
                 }
             } catch(e) {
                 console.error("Failed to fetch live updates:", e);
+                if (isFirstLoad) {
+                    document.getElementById('stats-skeleton').innerHTML = `
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            <div style="font-weight:700; color:var(--error);">Ulanishda xatolik</div>
+                            <div style="font-size:12px; margin-top:4px; opacity:0.8;">${e.message}</div>
+                        </div>`;
+                }
             }
         }
 
