@@ -909,13 +909,51 @@ async def handle_link(message: types.Message, state: FSMContext) -> None:
                 }.get(lang, f"• _...and {len(swaps) - 5} more (details in report)._\n")
                 report += more_text
 
+        # Audit logga saqlash va transactionlarni yozish
+        summary: str = f"In:{data['total_income']} Out:{data['total_outcome']}"
+        from database import log_audit, log_audit_transactions, find_common_counterparties
+        audit_id = log_audit(message.from_user.id, network, address, summary, risk_level)
+        
+        normal_txs = data.get("normal_transfers", [])
+        log_audit_transactions(audit_id, address, normal_txs)
+        
+        # Kesishuvlarni (Common links) aniqlash
+        common_links = find_common_counterparties(address)
+        data["common_links"] = common_links
+        
+        if common_links:
+            # Telegram xabarida faqat 4 ta unikal kesishuvni ko'rsatamiz (limitdan oshmaslik uchun)
+            unique_links = {}
+            for link in common_links:
+                shared = link["shared_address"]
+                if shared not in unique_links:
+                    unique_links[shared] = link
+                if len(unique_links) >= 4:
+                    break
+            
+            report += t("common_links_title", lang)
+            for shared, link in unique_links.items():
+                r_dir = "📥" if link["related_dir"] == "in" else "📤"
+                c_dir = "📥" if link["current_dir"] == "in" else "📤"
+                
+                sh_addr_short = f"{shared[:8]}...{shared[-6:]}"
+                rel_wallet_short = f"{link['related_wallet'][:8]}...{link['related_wallet'][-6:]}"
+                
+                report += t(
+                    "common_link_item", lang,
+                    shared_addr=sh_addr_short,
+                    related_wallet=rel_wallet_short,
+                    related_dir=r_dir,
+                    related_amount=f"{link['related_amount']:,.2f}",
+                    related_symbol=link["related_symbol"],
+                    current_dir=c_dir,
+                    current_amount=f"{link['current_amount']:,.2f}",
+                    current_symbol=link["current_symbol"]
+                )
+
         # Footer
         now: str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         report += t("result_footer", lang, timestamp=now)
-
-        # Audit logga saqlash
-        summary: str = f"In:{data['total_income']} Out:{data['total_outcome']}"
-        log_audit(message.from_user.id, network, address, summary, risk_level)
 
         # Word hisoboti yaratish
         from services.report_generator import generate_docx_report

@@ -66,7 +66,14 @@ REPORT_TEXTS = {
         "table_counterparty": "Qarshi Hamyon (From/To)",
         "table_amount": "Qiymati",
         "table_asset": "Valyuta",
-        "no_txs_text": "Tashqi hamyonlar bilan tranzaksiyalar aniqlanmadi."
+        "no_txs_text": "Tashqi hamyonlar bilan tranzaksiyalar aniqlanmadi.",
+        
+        # Cluster Analysis
+        "cluster_title": "Aloqador Hamyonlar Tahlili (Cluster Link)",
+        "table_shared_addr": "Umumiy Hamyon (C)",
+        "table_related_wallet": "Aloqador Hamyon",
+        "table_relation_details": "Tranzaksiya tafsilotlari",
+        "no_common_links": "Boshqa hamyonlar bilan umumiy zanjir/aloqadorliklar aniqlanmadi."
     },
     "ru": {
         "title": "РАСШИРЕННЫЙ ОТЧЕТ ПО АУДИТУ",
@@ -110,7 +117,14 @@ REPORT_TEXTS = {
         "table_counterparty": "Контрагент (From/To)",
         "table_amount": "Сумма",
         "table_asset": "Валюта",
-        "no_txs_text": "Транзакции с внешними кошельками не найдены."
+        "no_txs_text": "Транзакции с внешними кошельками не найдены.",
+        
+        # Cluster Analysis
+        "cluster_title": "Анализ связи кошельков (Cluster Link)",
+        "table_shared_addr": "Общий кошелек (C)",
+        "table_related_wallet": "Связанный кошелек",
+        "table_relation_details": "Детали транзакций",
+        "no_common_links": "Общих связей с ранее проверенными кошельками не обнаружено."
     },
     "en": {
         "title": "EXTENDED AUDIT REPORT",
@@ -154,7 +168,14 @@ REPORT_TEXTS = {
         "table_counterparty": "Counterparty (From/To)",
         "table_amount": "Amount",
         "table_asset": "Asset",
-        "no_txs_text": "No transactions with external wallets detected."
+        "no_txs_text": "No transactions with external wallets detected.",
+        
+        # Cluster Analysis
+        "cluster_title": "Connected Wallets Analysis (Cluster Link)",
+        "table_shared_addr": "Shared Address (C)",
+        "table_related_wallet": "Related Wallet",
+        "table_relation_details": "Transaction Details",
+        "no_common_links": "No shared connections with previously audited wallets detected."
     }
 }
 
@@ -584,6 +605,84 @@ def generate_docx_report(
                 row.cells[idx].width = width
     else:
         doc.add_paragraph(t["no_txs_text"])
+
+    doc.add_paragraph().paragraph_format.space_after = Pt(12)
+
+    # 5.5 CLUSTER ANALYSIS (Aloqador Hamyonlar Tahlili)
+    h_cluster = doc.add_paragraph()
+    h_cluster_run = h_cluster.add_run(t["cluster_title"])
+    h_cluster_run.font.size = Pt(14)
+    h_cluster_run.font.bold = True
+    h_cluster_run.font.color.rgb = COLOR_PRIMARY
+    h_cluster.paragraph_format.space_after = Pt(6)
+
+    common_links = data.get("common_links", [])
+    if common_links:
+        # Jadval yaratamiz: № | Umumiy hamyon (C) | Aloqador hamyon | Tafsilotlar
+        cluster_table = doc.add_table(rows=1 + len(common_links), cols=4)
+        cluster_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        _set_table_borders(cluster_table)
+        _make_table_header_repeat(cluster_table)
+
+        c_headers = [
+            t["table_num"],
+            t["table_shared_addr"],
+            t["table_related_wallet"],
+            t["table_relation_details"]
+        ]
+
+        hdr_cells = cluster_table.rows[0].cells
+        for i, title in enumerate(c_headers):
+            hdr_cells[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = hdr_cells[i].paragraphs[0].add_run(title)
+            run.bold = True
+            run.font.size = Pt(7.5)
+            run.font.color.rgb = COLOR_WHITE
+            _set_cell_background(hdr_cells[i], "1F4E79")
+            _set_cell_margins(hdr_cells[i], top=70, bottom=70, left=60, right=60)
+
+        c_widths = [Inches(0.3), Inches(3.2), Inches(3.2), Inches(1.5)]
+
+        for row_idx, link in enumerate(common_links, 1):
+            row_cells = cluster_table.rows[row_idx].cells
+            bg_color = "F9FBFD" if row_idx % 2 == 0 else "FFFFFF"
+
+            shared = link["shared_address"]
+            related = link["related_wallet"]
+
+            # Tafsilotlar
+            r_dir = "📥" if link["related_dir"] == "in" else "📤"
+            c_dir = "📥" if link["current_dir"] == "in" else "📤"
+            details = (
+                f"Rel: {r_dir} {link['related_amount']:,.2f} {link['related_symbol']}\n"
+                f"Cur: {c_dir} {link['current_amount']:,.2f} {link['current_symbol']}"
+            )
+
+            vals = [str(row_idx), shared, related, details]
+
+            for col_idx, val in enumerate(vals):
+                cell = row_cells[col_idx]
+                p = cell.paragraphs[0]
+                run = p.add_run(val)
+                run.font.size = Pt(7)
+                _set_cell_background(cell, bg_color)
+                _set_cell_margins(cell, top=50, bottom=50, left=50, right=50)
+
+                if col_idx in (1, 2):
+                    run.font.name = "Courier New"
+                    run.font.size = Pt(6.5)
+                    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                elif col_idx == 0:
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                else:
+                    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+        # Ustun kengliklarini sozlash
+        for row in cluster_table.rows:
+            for idx, w in enumerate(c_widths):
+                row.cells[idx].width = w
+    else:
+        doc.add_paragraph(t["no_common_links"])
 
     doc.add_paragraph().paragraph_format.space_after = Pt(12)
 

@@ -668,6 +668,55 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "📊 Открыть в Web App",
         "en": "📊 View in Web App",
     },
+
+    # Admin approval flow texts
+    "access_denied": {
+        "uz": "⛔ *Kirish taqiqlangan.*\n\nBotdan foydalanish uchun arizangiz tasdiqlanishi kutilmoqda yoki rad etilgan. Muammo bo'lsa adminlar bilan bog'laning.",
+        "ru": "⛔ *Доступ запрещен.*\n\nЗаявка на доступ ожидает одобрения или была отклонена. Если есть вопросы, обратитесь к администраторам.",
+        "en": "⛔ *Access denied.*\n\nYour access request is pending approval or has been rejected. Contact administrators if you have any questions.",
+    },
+    "request_pending": {
+        "uz": "⏳ *Arizangiz ko'rib chiqilmoqda.*\n\nTaxallusingiz muvaffaqiyatli saqlandi. Adminlar arizangizni tasdiqlashini kuting.",
+        "ru": "⏳ *Ваша заявка на рассмотрении.*\n\nПсевдоним успешно сохранен. Ожидайте одобрения со стороны администраторов.",
+        "en": "⏳ *Application is under review.*\n\nYour alias has been successfully saved. Please wait for the admin to approve your request.",
+    },
+    "admin_approval_request": {
+        "uz": "🔔 *Yangi foydalanuvchi arizasi:*\n\n👤 Taxallus: `{alias}`\n🆔 User ID: `{user_id}`\n🗣 Username: @{username}\n\nUshbu foydalanuvchiga ruxsat berasizmi?",
+        "ru": "🔔 *Новая заявка пользователя:*\n\n👤 Псевдоним: `{alias}`\n🆔 User ID: `{user_id}`\n🗣 Username: @{username}\n\nОдобрить доступ этому пользователю?",
+        "en": "🔔 *New user access request:*\n\n👤 Alias: `{alias}`\n🆔 User ID: `{user_id}`\n🗣 Username: @{username}\n\nDo you want to grant access to this user?",
+    },
+    "admin_approved_log": {
+        "uz": "✅ Foydalanuvchi `{alias}` ({user_id}) tasdiqlandi.\nAdmin: {admin}",
+        "ru": "✅ Пользователь `{alias}` ({user_id}) одобрен.\nАдмин: {admin}",
+        "en": "✅ User `{alias}` ({user_id}) approved.\nAdmin: {admin}",
+    },
+    "admin_rejected_log": {
+        "uz": "❌ Foydalanuvchi `{alias}` ({user_id}) arizasi rad etildi.\nAdmin: {admin}",
+        "ru": "❌ Заявка пользователя `{alias}` ({user_id}) отклонена.\nАдмин: {admin}",
+        "en": "❌ Request of user `{alias}` ({user_id}) rejected.\nAdmin: {admin}",
+    },
+    "user_approved_notification": {
+        "uz": "🎉 *Tabriklaymiz!*\n\nAdmin arizangizni tasdiqladi. Endi botdan to'liq foydalanishingiz mumkin.\n\nYo'riqnoma: /help",
+        "ru": "🎉 *Поздравляем!*\n\nАдминистратор одобрил вашу заявку. Теперь вы можете использовать бота.\n\nПомощь: /help",
+        "en": "🎉 *Congratulations!*\n\nAdmin has approved your request. You can now use the bot fully.\n\nHelp: /help",
+    },
+    "user_rejected_notification": {
+        "uz": "❌ *Arizangiz rad etildi.*\n\nKechirasiz, adminlar sizga botdan foydalanish ruxsatini berishmadi.",
+        "ru": "❌ *Ваша заявка отклонена.*\n\nИзвините, администраторы не одобрили ваш доступ к боту.",
+        "en": "❌ *Request rejected.*\n\nSorry, administrators did not grant you access to the bot.",
+    },
+
+    # Bog'liqliklar (Common Links)
+    "common_links_title": {
+        "uz": "\n\n🔗 *Aloqador Hamyonlar Tahlili (Cluster Link):*\n",
+        "ru": "\n\n🔗 *Анализ связи кошельков (Cluster Link):*\n",
+        "en": "\n\n🔗 *Connected Wallets Analysis (Cluster Link):*\n",
+    },
+    "common_link_item": {
+        "uz": "• *Umumiy hamyon:* `{shared_addr}`\n  🤝 *Aloqador:* `{related_wallet}`\n  🔹 U bilan: {related_dir} {related_amount} {related_symbol}\n  🔹 Joriy bilan: {current_dir} {current_amount} {current_symbol}\n",
+        "ru": "• *Общий кошелек:* `{shared_addr}`\n  🤝 *Связан с:* `{related_wallet}`\n  🔹 С ним: {related_dir} {related_amount} {related_symbol}\n  🔹 С текущим: {current_dir} {current_amount} {current_symbol}\n",
+        "en": "• *Shared address:* `{shared_addr}`\n  🤝 *Related to:* `{related_wallet}`\n  🔹 With it: {related_dir} {related_amount} {related_symbol}\n  🔹 With current: {current_dir} {current_amount} {current_symbol}\n",
+    },
 }
 
 
