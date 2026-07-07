@@ -224,9 +224,7 @@ def create_web_app() -> web.Application:
 
 
 async def _open_tunnel(port: int) -> str:
-    """serveo.net orqali SSH tunnel ochish (bepul HTTPS).
-
-    Hech narsa o'rnatish kerak emas — faqat SSH.
+    """cloudflared orqali Cloudflare Tunnel ochish (bepul HTTPS).
 
     Returns:
         HTTPS public URL yoki bo'sh string.
@@ -235,17 +233,14 @@ async def _open_tunnel(port: int) -> str:
 
     try:
         _tunnel_process = await asyncio.create_subprocess_exec(
-            "ssh",
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "ServerAliveInterval=60",
-            "-o", "ExitOnForwardFailure=yes",
-            "-R", f"80:localhost:{port}",
-            "serveo.net",
+            "/usr/local/bin/cloudflared",
+            "tunnel",
+            "--url", f"http://localhost:{port}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
 
-        # URL ni stdout dan olish (max 20 soniya kutish)
+        # URL ni stdout/stderr dan olish (max 20 soniya kutish)
         for _ in range(40):
             if _tunnel_process.stdout:
                 try:
@@ -255,21 +250,17 @@ async def _open_tunnel(port: int) -> str:
                     decoded = line.decode("utf-8", errors="ignore").strip()
                     if decoded:
                         logger.info(f"Tunnel output: {decoded}")
-                        # serveo.net URL
-                        url_match = re.search(r"(https://[^\s]+serveousercontent\.com[^\s]*)", decoded)
+                        # trycloudflare.com URL
+                        url_match = re.search(r"(https://[^\s]+\.trycloudflare\.com)", decoded)
                         if url_match:
                             return url_match.group(1)
-                        # Umumiy HTTPS URL fallback
-                        url_match2 = re.search(r"(https://[^\s]+)", decoded)
-                        if url_match2:
-                            return url_match2.group(1)
                 except asyncio.TimeoutError:
                     continue
             else:
                 await asyncio.sleep(0.5)
 
     except FileNotFoundError:
-        logger.error("SSH topilmadi. Tunnel ishlamaydi.")
+        logger.error("cloudflared topilmadi. Tunnel ishlamaydi.")
     except Exception as e:
         logger.error(f"Tunnel xatolik: {e}")
 
@@ -288,8 +279,8 @@ async def start_web_server(ngrok_token: str = "") -> web.AppRunner:
     await site.start()
     logger.info(f"🌐 Web server: http://localhost:{WEB_PORT}")
 
-    # SSH tunnel (localhost.run)
-    logger.info("🔗 Tunnel ochilmoqda (localhost.run)...")
+    # Cloudflare Tunnel
+    logger.info("🔗 Tunnel ochilmoqda (Cloudflare)...")
     _tunnel_url = await _open_tunnel(WEB_PORT)
 
     if _tunnel_url:
