@@ -42,11 +42,20 @@ async def safe_request(
             response: httpx.Response = await client.request(method, url, **kwargs)
             response.raise_for_status()
             return response
-        except (httpx.HTTPStatusError, httpx.ConnectError, httpx.ReadTimeout) as e:
+        except httpx.HTTPStatusError as e:
+            last_error = e
+            if e.response.status_code == 429 and attempt < retries - 1:
+                wait = RETRY_DELAY * (attempt + 1)
+                logger.warning(f"Rate limit (429) for {url}. Waiting {wait}s...")
+                await asyncio.sleep(wait)
+            else:
+                logger.error(f"HTTP error {e.response.status_code} for {url}. Raising immediately.")
+                raise e
+        except (httpx.ConnectError, httpx.ReadTimeout) as e:
             last_error = e
             if attempt < retries - 1:
-                wait: float = RETRY_DELAY * (attempt + 1)
-                logger.warning(f"Retry {attempt + 1}/{retries} for {url}: {e}. Waiting {wait}s...")
+                wait = RETRY_DELAY * (attempt + 1)
+                logger.warning(f"Network error {e} for {url}. Waiting {wait}s...")
                 await asyncio.sleep(wait)
             else:
                 logger.error(f"All {retries} retries failed for {url}: {e}")
